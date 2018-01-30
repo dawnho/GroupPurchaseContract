@@ -1,0 +1,27 @@
+{
+  "name": "crypt-group",
+  "version": "1.0.0",
+  "description": "Group-buy Contract",
+  "main": "index.js",
+  "scripts": {
+    "test": "truffle compile"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dawnho/crypt-group.git"
+  },
+  "author": "Dawn Ho",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/dawnho/crypt-group/issues"
+  },
+  "homepage": "https://github.com/dawnho/crypt-group#readme",
+  "dependencies": {
+    "truffle": "^4.0.5",
+    "zeppelin-solidity": "^1.6.0"
+  },
+  "devDependencies": {
+    "chai": "^4.1.2",
+    "solhint": "^1.1.10"
+  }
+}
