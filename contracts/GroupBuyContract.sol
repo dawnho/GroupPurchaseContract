@@ -29,7 +29,7 @@ contract CelebrityToken {
 contract GroupBuyContract {
   /*** CONSTANTS ***/
   bool public isGroupBuy = true;
-  uint256 public constant MIN_CONTRIBUTION = 0.1 ether; // Check
+  uint256 public constant MAX_CONTRIBUTION_SLOTS = 20; // Check
 
   /*** DATATYPES ***/
   // @dev A Group is created for all the contributors who want to contribute
@@ -39,7 +39,7 @@ contract GroupBuyContract {
     address[] contributorArr;
     // Maps address to an address's position (+ 1) in the contributorArr;
     // 1 is added to the position because zero is the default value in the mapping
-    mapping(address => uint) addressToContributorArrIndex;
+    mapping(address => uint256) addressToContributorArrIndex;
     mapping(address => uint256) addressToContribution; // user address to amount contributed
     bool exists; // For tracking whether a group has been initialized or not
     bool tokenPurchased; // Set to true if token was purchased by group
@@ -53,16 +53,24 @@ contract GroupBuyContract {
   struct Contributor {
     // Maps tokenId to an tokenId's position (+ 1) in the groupArr;
     // 1 is added to the position because zero is the default value in the mapping
-    mapping(uint256 => uint) tokenIdToGroupIndex;
+    mapping(uint256 => uint) tokenIdToGroupArrIndex;
     // Array of tokenIds contributed to by a contributor
     uint256[] groupArr;
     bool exists;
-    uint256 proceedsBalance; // ledger for proceeds from group sale
+    uint256 withdrawableBalance; // ledger for proceeds from group sale
   }
 
   /*** EVENTS ***/
-  event Contribution(uint256 _tokenId, address contributor, uint256 newBalance, uint256 netChange);
-  event FundsReceived(uint256 balance, address origin);
+  event Contribution(
+    uint256 _tokenId,
+    address contributor,
+    uint256 groupBalance,
+    uint256 netChange
+  );
+
+  event TokenPurchaseAttempt(uint256 balance, address origin);
+
+  event TokenSold(uint256 balance, address origin);
 
   /*** STORAGE ***/
   /// @dev A mapping from token IDs to the group associated with that token.
@@ -72,6 +80,7 @@ contract GroupBuyContract {
   mapping (address => Contributor) private userAddressToContributor;
 
   uint256 public groupCount;
+  uint256 public usersBalance;
 
   CelebrityToken celebContract;
 
@@ -150,54 +159,113 @@ contract GroupBuyContract {
   /// @notice Allow user to join purchase group
   /// @param _tokenId The ID of the Token purchase group to be joined
   function contributeToGroup(uint256 _tokenId) public {
-    address newOwner = msg.sender;
-    Group storage group = tokenIndexToGroup[_tokenId];
+    address userAdd = msg.sender;
+    Group memory group = tokenIndexToGroup[_tokenId];
+    Contributor memory contributor = userAddressToContributor[userAdd];
 
     // Safety check to prevent against an unexpected 0x0 default.
-    require(_addressNotNull(newOwner));
-
-    /// Safety check to ensure amount contributed is higher than MIN_CONTRIBUTION
-    require(msg.value > MIN_CONTRIBUTION);
+    require(_addressNotNull(userAdd));
 
     /// Safety check to make sure contributor has not already joined this group buy
-    require(group[_tokenId].addressToContributorArrIndex[msg.sender] == 0);
+    require(group.addressToContributorArrIndex[userAdd] == 0);
+    require(contributor.tokenIdToGroupArrIndex[_tokenId] == 0);
 
-    uint256 tokenPrice =
+    uint256 tokenPrice = celebContract.priceOf(_tokenId); /// DOUBLE CHECK IF THIS IS DONE RIGHT!!!!!!
+    /// Safety check to ensure amount contributed is higher than a tenth of the
+    ///  purchase price
+    require(msg.value > div(tokenPrice, MAX_CONTRIBUTION_SLOTS));
 
-    if (!group.exists) {
+    if (!tokenIndexToGroup[_tokenId].exists) {
       tokenIndexToGroup[_tokenId].exists = true;
     }
 
-    uint index = tokenIndexToGroup[_tokenId].contributorArr.push(msg.sender);
-    tokenIndexToGroup[_tokenId].addressToContributorArrIndex
+    // Index saved is 1 + the array's index, b/c 0 is the default value in a mapping,
+    //  so as stored on the mapping, array index will begin at 1
+    uint256 cIndex = tokenIndexToGroup[_tokenId].contributorArr.push(userAdd);
+    tokenIndexToGroup[_tokenId].addressToContributorArrIndex[userAdd] = cIndex;
 
+    tokenIndexToGroup[_tokenId].addressToContribution[userAdd] = msg.value;
+    tokenIndexToGroup[_tokenId].contributedBalance += msg.value;
 
+    if (!contributor.exists) {
+      userAddressToContributor[userAdd].exists = true;
+    }
 
+    // Index saved is 1 + the array's index, b/c 0 is the default value in a mapping,
+    //  so as stored on the mapping, array index will begin at 1
+    uint256 gIndex = userAddressToContributor[userAdd].groupArr.push(_tokenId);
+    userAddressToContributor[userAdd].tokenIdToGroupArrIndex[_tokenId] = gIndex;
 
+    usersBalance += msg.value;
 
-
-    /* Contributor memory _contributor = Contributor({
-      address: newOwner,
-      amount: balance
-    }); */
-
-
+    Contribution(
+      _tokenId,
+      userAdd,
+      tokenIndexToGroup[_tokenId].contributedBalance,
+      msg.value
+    );
   }
 
   /// @notice Allow user to withdraw contribution to purchase group
   /// @param _tokenId The ID of the Token purchase group to be left
   function withdrawFromGroup(uint256 _tokenId) public {
-    address newOwner = msg.sender;
+    address userAdd = msg.sender;
 
-
+    Group memory group = tokenIndexToGroup[_tokenId];
+    Contributor memory contributor = userAddressToContributor[userAdd];
 
     // Safety check to prevent against an unexpected 0x0 default.
-    require(_addressNotNull(newOwner));
+    require(_addressNotNull(userAdd));
 
-    /// amount contributed to be higher than zero
-    require(msg.value > 0);
+    // Safety checks to ensure contributor has contributed to group
+    require(group.addressToContributorArrIndex[userAdd] > 0);
+    require(contributor.tokenIdToGroupArrIndex[_tokenId] > 0);
 
+    // Index was saved is 1 + the array's index, b/c 0 is the default value
+    //  in a mapping.
+    uint cIndex = group.addressToContributorArrIndex[userAdd] - 1;
+    uint lastCIndex = group.contributorArr.length - 1;
+    uint refundBalance = group.addressToContribution[userAdd];
+    uint lastAddress = group.contributorArr[lastCIndex];
 
+    // clear contribution record in group
+    tokenIndexToGroup[_tokenId].addressToContributorArrIndex[userAdd] = 0;
+    tokenIndexToGroup[_tokenId].addressToContribution[userAdd] = 0;
+
+    // move address in last position to deleted contributor's spot
+    if (lastCIndex > 0) {
+      tokenIndexToGroup[_tokenId].addressToContributorArrIndex[lastAddress] = cIndex;
+      tokenIndexToGroup[_tokenId].contributorArr[cIndex] = lastAddress;
+    }
+
+    tokenIndexToGroup[_tokenId].contributorArr.length -= 1;
+    tokenIndexToGroup[_tokenId].contributedBalance -= refundBalance;
+
+    // Index saved is 1 + the array's index, b/c 0 is the default value
+    //  in a mapping.
+    uint gIndex = contributor.tokenIdToGroupArrIndex[_tokenId] - 1;
+    uint lastGIndex = contributor.groupArr.length - 1;
+    uint lastTokenId = contributor.groupArr[lastGIndex];
+
+    // clear group record in Contributor
+    userAddressToContributor[userAdd].tokenIdToGroupArrIndex[_tokenId] = 0;
+
+    // move tokenId in last position to deleted group record's spot
+    if (lastGIndex > 0) {
+      userAddressToContributor[userAdd].tokenIdToGroupArrIndex[lastTokenId] = gIndex;
+      userAddressToContributor[userAdd].groupArr[gIndex] = lastTokenId;
+    }
+
+    usersBalance -= msg.value;
+
+    userAdd.transfer(refundBalance); // DO WE WANT TO USE WITHDRAWAL METHOD INSTEAD
+
+    Contribution(
+      _tokenId,
+      userAdd,
+      tokenIndexToGroup[_tokenId].contributedBalance,
+      mul(-1, balance)
+    );
   }
 
   /// @dev Assigns a new address to act as the CEO. Only available to the current CEO.
