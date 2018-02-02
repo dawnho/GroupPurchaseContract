@@ -1,29 +1,6 @@
 pragma solidity ^0.4.18;
 import "zeppelin-solidity/contracts/math/SafeMath.sol"; // solhint-disable-line
-
-
-contract CelebrityToken {
-  function approve(address _to, uint256 _tokenId) public;
-  function balanceOf(address _owner) public view returns (uint256 balance);
-  function createPromoPerson(address _owner, string _name, uint256 _price) public;
-  function createContractPerson(string _name) public;
-  function getPerson(uint256 _tokenId) public view returns (string personName, uint256 sellingPrice, address owner);
-  function implementsERC721() public pure returns (bool);
-  function name() public pure returns (string);
-  function ownerOf(uint256 _tokenId) public view returns (address owner);
-  function payout(address _to) public;
-  function purchase(uint_tokenId) public payable;
-  function priceOf(uint256 _tokenId) public view returns (uint256 price);
-  function setCEO(address _newCEO) public;
-  function setCOO(address _newCOO) public;
-  function symbol() public pure returns (string);
-  function takeOwnership(uint256 _tokenId) public;
-  function tokensOfOwner(address _owner)public view returns(uint256[] ownerTokens);
-  function totalSupply() public view returns (uint256 total);
-  function transfer(address _to, uint256 _tokenId) public;
-  function transferFrom(address _from, address _to, uint256 _tokenId) public;
-  function withdraw() public;
-}
+import "./CelebrityToken.sol";
 
 
 contract GroupBuyContract {
@@ -61,6 +38,8 @@ contract GroupBuyContract {
   }
 
   /*** EVENTS ***/
+  event FundsReceived(uint256 amount, address _from);
+
   event Contribution(
     uint256 _tokenId,
     address contributor,
@@ -82,7 +61,7 @@ contract GroupBuyContract {
   uint256 public groupCount;
   uint256 public usersBalance;
 
-  CelebrityToken celebContract;
+  CelebrityToken private celebContract;
 
   // The addresses of the accounts (or contracts) that can execute actions within each roles.
   address public ceoAddress;
@@ -132,48 +111,69 @@ contract GroupBuyContract {
     FundsReceived(msg.value, msg.sender);
   }
 
-  /// @notice Get contributed balance
+  /// @notice Get contributed balance in a particular token
   /// @param _tokenId The ID of the token to be queried
-  function getContributionInGroup(uint256 _tokenId) public view returns (uint balance) {
-    group = tokenIndexToGroup[_tokenId];
+  function getContributionBalanceForTokenGroup(uint256 _tokenId) public view returns (uint balance) {
+    var group = tokenIndexToGroup[_tokenId];
     require(group.exists);
     balance = group.addressToContribution[msg.sender];
   }
 
   /// @notice Get no. of contributors in a Group
   /// @param _tokenId The ID of the token to be queried
-  function getGroupContributorCount(uint256 _tokenId) public view returns (uint count) {
-    group = tokenIndexToGroup[_tokenId];
+  function getContributorsInTokenGroupCount(uint256 _tokenId) public view returns (uint count) {
+    var group = tokenIndexToGroup[_tokenId];
     require(group.exists); // DOUBLE CHECK IF THIS IS A VALID CHECK
     count = group.contributorArr.length;
   }
 
+  function getGroupsContributedTo() public view returns (uint256[] groupIds) {
+    var contributor = userAddressToContributor[msg.sender];
+    require(contributor.exists);
+    groupIds = contributor.groupArr;
+  }
+
+  /// @notice Get address of connected contract
+  function getLinkedContractAddress() public view returns (address) {
+    return celebContract;
+  }
+
   /// @notice Get contributed balance
   /// @param _tokenId The ID of the token to be queried
-  function getTotalGroupBalance(uint256 _tokenId) public view returns (uint balance) {
-    group = tokenIndexToGroup[_tokenId];
+  function getTokenGroupTotalBalance(uint256 _tokenId) public view returns (uint balance) {
+    var group = tokenIndexToGroup[_tokenId];
     require(group.exists);
     balance = group.contributedBalance;
   }
 
   /// @notice Allow user to join purchase group
   /// @param _tokenId The ID of the Token purchase group to be joined
-  function contributeToGroup(uint256 _tokenId) public {
+  function contributeToTokenGroup(uint256 _tokenId) public payable {
     address userAdd = msg.sender;
-    Group memory group = tokenIndexToGroup[_tokenId];
-    Contributor memory contributor = userAddressToContributor[userAdd];
+    var group = tokenIndexToGroup[_tokenId];
+    var contributor = userAddressToContributor[userAdd];
 
     // Safety check to prevent against an unexpected 0x0 default.
     require(_addressNotNull(userAdd));
 
     /// Safety check to make sure contributor has not already joined this group buy
-    require(group.addressToContributorArrIndex[userAdd] == 0);
-    require(contributor.tokenIdToGroupArrIndex[_tokenId] == 0);
+    if (!group.exists) {
+      tokenIndexToGroup[_tokenId].exists = true;
+    } else {
+      require(tokenIndexToGroup[_tokenId].addressToContributorArrIndex[userAdd] == 0);
+    }
 
-    uint256 tokenPrice = celebContract.priceOf(_tokenId); /// DOUBLE CHECK IF THIS IS DONE RIGHT!!!!!!
-    /// Safety check to ensure amount contributed is higher than a tenth of the
+    if (!contributor.exists) {
+      userAddressToContributor[userAdd].exists = true;
+    } else {
+      require(userAddressToContributor[userAdd].tokenIdToGroupArrIndex[_tokenId] == 0);
+    }
+
+    uint256 tokenPrice = celebContract.priceOf(_tokenId);
+
+    /// Safety check to ensure amount contributed is higher than min portion of the
     ///  purchase price
-    require(msg.value > div(tokenPrice, MAX_CONTRIBUTION_SLOTS));
+    require(msg.value > SafeMath.div(tokenPrice, MAX_CONTRIBUTION_SLOTS));
 
     if (!tokenIndexToGroup[_tokenId].exists) {
       tokenIndexToGroup[_tokenId].exists = true;
@@ -204,15 +204,19 @@ contract GroupBuyContract {
       tokenIndexToGroup[_tokenId].contributedBalance,
       msg.value
     );
+
+    if (tokenIndexToGroup[_tokenId].contributedBalance > tokenPrice) {
+      //run purchase!!!!! @#$@#)$(@#())
+    }
   }
 
   /// @notice Allow user to withdraw contribution to purchase group
   /// @param _tokenId The ID of the Token purchase group to be left
-  function withdrawFromGroup(uint256 _tokenId) public {
+  function withdrawFromTokenGroup(uint256 _tokenId) public {
     address userAdd = msg.sender;
 
-    Group memory group = tokenIndexToGroup[_tokenId];
-    Contributor memory contributor = userAddressToContributor[userAdd];
+    var group = tokenIndexToGroup[_tokenId];
+    var contributor = userAddressToContributor[userAdd];
 
     // Safety check to prevent against an unexpected 0x0 default.
     require(_addressNotNull(userAdd));
@@ -226,7 +230,7 @@ contract GroupBuyContract {
     uint cIndex = group.addressToContributorArrIndex[userAdd] - 1;
     uint lastCIndex = group.contributorArr.length - 1;
     uint refundBalance = group.addressToContribution[userAdd];
-    uint lastAddress = group.contributorArr[lastCIndex];
+    address lastAddress = group.contributorArr[lastCIndex];
 
     // clear contribution record in group
     tokenIndexToGroup[_tokenId].addressToContributorArrIndex[userAdd] = 0;
@@ -256,15 +260,16 @@ contract GroupBuyContract {
       userAddressToContributor[userAdd].groupArr[gIndex] = lastTokenId;
     }
 
-    usersBalance -= msg.value;
+    usersBalance -= refundBalance;
 
-    userAdd.transfer(refundBalance); // DO WE WANT TO USE WITHDRAWAL METHOD INSTEAD
+    userAddressToContributor[userAdd].withdrawableBalance += refundBalance;
+    //userAdd.transfer(refundBalance); // DO WE WANT TO USE WITHDRAWAL METHOD INSTEAD
 
     Contribution(
       _tokenId,
       userAdd,
       tokenIndexToGroup[_tokenId].contributedBalance,
-      mul(-1, balance)
+      SafeMath.mul(uint256(-1), refundBalance)
     );
   }
 

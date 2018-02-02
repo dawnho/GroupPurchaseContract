@@ -4,7 +4,7 @@
   "description": "Group-buy Contract",
   "main": "index.js",
   "scripts": {
-    "test": "truffle compile"
+    "test": "truffle test"
   },
   "repository": {
     "type": "git",
@@ -17,11 +17,18 @@
   },
   "homepage": "https://github.com/dawnho/crypt-group#readme",
   "dependencies": {
+    "babel-cli": "^6.26.0",
+    "babel-polyfill": "^6.26.0",
     "truffle": "^4.0.5",
     "zeppelin-solidity": "^1.6.0"
   },
   "devDependencies": {
+    "babel-preset-es2015": "^6.24.1",
+    "babel-preset-stage-2": "^6.24.1",
+    "babel-preset-stage-3": "^6.17.0",
+    "babel-register": "^6.23.0",
     "chai": "^4.1.2",
-    "solhint": "^1.1.10"
+    "solhint": "^1.1.10",
+    "web3": "^1.0.0-beta.27"
   }
 }
