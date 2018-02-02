@@ -56,12 +56,12 @@ contract GroupBuyContract {
   mapping(uint256 => Group) private tokenIndexToGroup;
 
   // @dev A mapping from owner address to available balance not held by a Group.
-  mapping (address => Contributor) private userAddressToContributor;
+  mapping(address => Contributor) private userAddressToContributor;
 
   uint256 public groupCount;
   uint256 public usersBalance;
 
-  CelebrityToken private celebContract;
+  CelebrityToken public linkedContract;
 
   // The addresses of the accounts (or contracts) that can execute actions within each roles.
   address public ceoAddress;
@@ -102,7 +102,7 @@ contract GroupBuyContract {
     ceoAddress = msg.sender;
     cooAddress = msg.sender;
     cfoAddress = msg.sender;
-    celebContract = CelebrityToken(contractAddress);
+    linkedContract = CelebrityToken(contractAddress);
   }
 
   /*** PUBLIC FUNCTIONS ***/
@@ -111,6 +111,13 @@ contract GroupBuyContract {
     FundsReceived(msg.value, msg.sender);
   }
 
+  /** Contract Verification Fns **/
+  /// @notice Get address of connected contract
+  function getLinkedContractAddress() public view returns (address) {
+    return linkedContract;
+  }
+
+  /** Information Query Fns **/
   /// @notice Get contributed balance in a particular token
   /// @param _tokenId The ID of the token to be queried
   function getContributionBalanceForTokenGroup(uint256 _tokenId) public view returns (uint balance) {
@@ -123,19 +130,22 @@ contract GroupBuyContract {
   /// @param _tokenId The ID of the token to be queried
   function getContributorsInTokenGroupCount(uint256 _tokenId) public view returns (uint count) {
     var group = tokenIndexToGroup[_tokenId];
-    require(group.exists); // DOUBLE CHECK IF THIS IS A VALID CHECK
+    require(group.exists);
     count = group.contributorArr.length;
   }
 
+  /// @notice Get list of tokenIds of the groups user contributed to
   function getGroupsContributedTo() public view returns (uint256[] groupIds) {
     var contributor = userAddressToContributor[msg.sender];
     require(contributor.exists);
     groupIds = contributor.groupArr;
   }
 
-  /// @notice Get address of connected contract
-  function getLinkedContractAddress() public view returns (address) {
-    return celebContract;
+  /// @notice Get withdrawable balance from sale proceeds
+  function getWithdrawableBalance() public view returns (uint256 balance) {
+    var contributor = userAddressToContributor[msg.sender];
+    require(contributor.exists);
+    balance = contributor.withdrawableBalance;
   }
 
   /// @notice Get contributed balance
@@ -146,6 +156,7 @@ contract GroupBuyContract {
     balance = group.contributedBalance;
   }
 
+  /** Action Fns **/
   /// @notice Allow user to join purchase group
   /// @param _tokenId The ID of the Token purchase group to be joined
   function contributeToTokenGroup(uint256 _tokenId) public payable {
@@ -169,11 +180,11 @@ contract GroupBuyContract {
       require(userAddressToContributor[userAdd].tokenIdToGroupArrIndex[_tokenId] == 0);
     }
 
-    uint256 tokenPrice = celebContract.priceOf(_tokenId);
+    uint256 tokenPrice = linkedContract.priceOf(_tokenId);
 
     /// Safety check to ensure amount contributed is higher than min portion of the
     ///  purchase price
-    require(msg.value > SafeMath.div(tokenPrice, MAX_CONTRIBUTION_SLOTS));
+    require(msg.value >= SafeMath.div(tokenPrice, MAX_CONTRIBUTION_SLOTS));
 
     if (!tokenIndexToGroup[_tokenId].exists) {
       tokenIndexToGroup[_tokenId].exists = true;
