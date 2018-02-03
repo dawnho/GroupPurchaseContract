@@ -19,7 +19,6 @@ contract GroupBuyContract {
     mapping(address => uint256) addressToContributorArrIndex;
     mapping(address => uint256) addressToContribution; // user address to amount contributed
     bool exists; // For tracking whether a group has been initialized or not
-    bool tokenPurchased; // Set to true if token was purchased by group
     uint256 contributedBalance; // Total amount contributed
     uint256 purchasePrice; // Price of purchased token
   }
@@ -47,7 +46,7 @@ contract GroupBuyContract {
     uint256 netChange
   );
 
-  event TokenPurchaseAttempt(uint256 balance, address origin);
+  event TokenPurchased(uint256 _tokenId, uint256 balance);
 
   event TokenSold(uint256 balance, address origin);
 
@@ -141,6 +140,14 @@ contract GroupBuyContract {
     groupIds = contributor.groupArr;
   }
 
+  /// @notice Get list of tokenIds of the groups user contributed to
+  function getGroupPurchasedPrice(uint256 _tokenId) public view returns (uint256 price) {
+    var group = tokenIndexToGroup[_tokenId];
+    require(group.exists);
+    require(group.purchasePrice > 0);
+    price = group.purchasePrice;
+  }
+
   /// @notice Get withdrawable balance from sale proceeds
   function getWithdrawableBalance() public view returns (uint256 balance) {
     var contributor = userAddressToContributor[msg.sender];
@@ -157,6 +164,20 @@ contract GroupBuyContract {
   }
 
   /** Action Fns **/
+  function activatePurchase(uint256 _tokenId) public {
+    var group = tokenIndexToGroup[_tokenId];
+    require(group.addressToContribution[msg.sender] > 0 ||
+            msg.sender == ceoAddress ||
+            msg.sender == cooAddress ||
+            msg.sender == cfoAddress);
+    var price = linkedContract.priceOf(_tokenId);
+    require(group.contributedBalance >= price);
+
+    group.contributedBalance -= price;
+
+    _purchase(_tokenId, price);
+  }
+
   /// @notice Allow user to join purchase group
   /// @param _tokenId The ID of the Token purchase group to be joined
   function contributeToTokenGroup(uint256 _tokenId) public payable {
@@ -169,9 +190,9 @@ contract GroupBuyContract {
 
     /// Safety check to make sure contributor has not already joined this group buy
     if (!group.exists) {
-      tokenIndexToGroup[_tokenId].exists = true;
+      group.exists = true;
     } else {
-      require(tokenIndexToGroup[_tokenId].addressToContributorArrIndex[userAdd] == 0);
+      require(group.addressToContributorArrIndex[userAdd] == 0);
     }
 
     if (!contributor.exists) {
@@ -180,26 +201,29 @@ contract GroupBuyContract {
       require(userAddressToContributor[userAdd].tokenIdToGroupArrIndex[_tokenId] == 0);
     }
 
+    // Safety check to make sure group hasn't purchased token already
+    require(group.purchasePrice == 0);
+
     uint256 tokenPrice = linkedContract.priceOf(_tokenId);
 
     /// Safety check to ensure amount contributed is higher than min portion of the
     ///  purchase price
     require(msg.value >= SafeMath.div(tokenPrice, MAX_CONTRIBUTION_SLOTS));
 
-    if (!tokenIndexToGroup[_tokenId].exists) {
-      tokenIndexToGroup[_tokenId].exists = true;
-    }
-
     // Index saved is 1 + the array's index, b/c 0 is the default value in a mapping,
     //  so as stored on the mapping, array index will begin at 1
     uint256 cIndex = tokenIndexToGroup[_tokenId].contributorArr.push(userAdd);
     tokenIndexToGroup[_tokenId].addressToContributorArrIndex[userAdd] = cIndex;
 
-    tokenIndexToGroup[_tokenId].addressToContribution[userAdd] = msg.value;
-    tokenIndexToGroup[_tokenId].contributedBalance += msg.value;
-
-    if (!contributor.exists) {
-      userAddressToContributor[userAdd].exists = true;
+    uint256 amountNeeded = SafeMath.sub(tokenPrice, group.contributedBalance);
+    if (msg.value > amountNeeded) {
+      tokenIndexToGroup[_tokenId].addressToContribution[userAdd] = amountNeeded;
+      tokenIndexToGroup[_tokenId].contributedBalance += amountNeeded;
+      // refund excess paid
+      userAddressToContributor[userAdd].withdrawableBalance += SafeMath.sub(msg.value, amountNeeded);
+    } else {
+      tokenIndexToGroup[_tokenId].addressToContribution[userAdd] = msg.value;
+      tokenIndexToGroup[_tokenId].contributedBalance += msg.value;
     }
 
     // Index saved is 1 + the array's index, b/c 0 is the default value in a mapping,
@@ -216,8 +240,8 @@ contract GroupBuyContract {
       msg.value
     );
 
-    if (tokenIndexToGroup[_tokenId].contributedBalance > tokenPrice) {
-      //run purchase!!!!! @#$@#)$(@#())
+    if (tokenIndexToGroup[_tokenId].contributedBalance >= tokenPrice) {
+      _purchase(_tokenId, tokenPrice);
     }
   }
 
@@ -231,6 +255,9 @@ contract GroupBuyContract {
 
     // Safety check to prevent against an unexpected 0x0 default.
     require(_addressNotNull(userAdd));
+
+    // Safety check to make sure group hasn't purchased token already
+    require(group.purchasePrice == 0);
 
     // Safety checks to ensure contributor has contributed to group
     require(group.addressToContributorArrIndex[userAdd] > 0);
@@ -312,5 +339,11 @@ contract GroupBuyContract {
   /// Safety check on _to address to prevent against an unexpected 0x0 default.
   function _addressNotNull(address _to) private pure returns (bool) {
     return _to != address(0);
+  }
+
+  function _purchase(uint256 _tokenId, uint256 amount) private {
+    tokenIndexToGroup[_tokenId].purchasePrice = amount;
+    /* linkedContract.purchase(_tokenId); */
+    TokenPurchased(_tokenId, amount);
   }
 }

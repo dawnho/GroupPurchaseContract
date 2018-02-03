@@ -1,7 +1,7 @@
 // Specifically request an abstraction for GroupBuyContract
 let CelebrityToken = artifacts.require("CelebrityToken");
 let GroupBuyContract = artifacts.require("GroupBuyContract");
-import expectThrow from "zeppelin-solidity/test/helpers/expectThrow";
+import { expectThrow } from "zeppelin-solidity/test/helpers/expectThrow";
 let Web3 = require('web3');
 let web3 = new Web3(new Web3.providers.HttpProvider("http://localhost:9545"));
 
@@ -22,10 +22,12 @@ contract('GroupBuyContract#setup', accounts => {
 
 contract("GroupBuyContract", accounts => {
   describe("#contributeToTokenGroup", () => {
-    let account_one, celeb, groupBuy;
+    let account_one, account_two, account_three, celeb, groupBuy;
 
-    beforeEach(async () => {
+    before(async () => {
       account_one = accounts[0];
+      account_two = accounts[1];
+      account_three = accounts[2];
       celeb = await CelebrityToken.deployed();
       groupBuy = await GroupBuyContract.deployed();
       await celeb.createPromoPerson(account_one, "Adam", 1000, {from: account_one});
@@ -68,6 +70,54 @@ contract("GroupBuyContract", accounts => {
         assert.equal(contribGroupArr[0], tokenId);
       });
     });
-  });
 
+    it("should not save the contribution record if price too low", async () => {
+      let tokenId = 1;
+      let tooSmallContribution = 10;
+      let okContribution = 200;
+
+      return expectThrow(groupBuy.contributeToTokenGroup(tokenId, {
+        from: account_two,
+        value: tooSmallContribution
+      })).then(() => {
+        return groupBuy.contributeToTokenGroup(tokenId, {
+          from: account_two,
+          value: okContribution
+        });
+      }).then(() => {
+        return groupBuy.getContributionBalanceForTokenGroup(tokenId, {from: account_two});
+      }).then(balance => {
+        assert.equal(balance.toNumber(), okContribution);
+      });
+    });
+
+    it("should revert if contributor already contributed", async () => {
+      let tokenId = 1;
+      let contribution = 300;
+
+      return expectThrow(groupBuy.contributeToTokenGroup(tokenId, {
+        from: account_two,
+        value: contribution
+      }));
+    });
+
+    it("should purchase token when enough contributed", async () => {
+      let tokenId = 1;
+      let contribution = 1700;
+      let contributionBalance;
+
+      return groupBuy.contributeToTokenGroup(tokenId, {
+        from: account_three,
+        value: contribution
+      }).then(() => {
+        return groupBuy.getContributionBalanceForTokenGroup(tokenId, {from: account_three});
+      }).then(balance => {
+        contributionBalance = balance;
+        return groupBuy.getGroupPurchasedPrice(tokenId, {from: account_three});
+      }).then(price => {
+        assert.equal(price, 2000);
+        assert.equal(contributionBalance.toNumber(), contribution);
+      });
+    });
+  });
 });
