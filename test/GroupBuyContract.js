@@ -103,8 +103,8 @@ contract("GroupBuyContract", accounts => {
 
     it("should purchase token when enough contributed", async () => {
       let tokenId = 1;
-      let contribution = 1700;
-      let contributionBalance;
+      let contribution = 1800;
+      let contributionBalance, purchasePrice;
 
       return groupBuy.contributeToTokenGroup(tokenId, {
         from: account_three,
@@ -115,8 +115,12 @@ contract("GroupBuyContract", accounts => {
         contributionBalance = balance;
         return groupBuy.getGroupPurchasedPrice(tokenId, {from: account_three});
       }).then(price => {
-        assert.equal(price, 2000);
-        assert.equal(contributionBalance.toNumber(), contribution);
+        purchasePrice = price;
+        return celeb.ownerOf(tokenId, {from: account_three});
+      }).then(address => {
+        assert.equal(contributionBalance.toNumber(), 1700);
+        assert.equal(purchasePrice, 2000);
+        assert.equal(address, GroupBuyContract.address, "Contract Address was set incorrectly");
       });
     });
   });

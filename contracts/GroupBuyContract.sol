@@ -237,7 +237,7 @@ contract GroupBuyContract {
       _tokenId,
       userAdd,
       tokenIndexToGroup[_tokenId].contributedBalance,
-      msg.value
+      tokenIndexToGroup[_tokenId].addressToContribution[userAdd]
     );
 
     if (tokenIndexToGroup[_tokenId].contributedBalance >= tokenPrice) {
@@ -343,7 +343,7 @@ contract GroupBuyContract {
 
   function _purchase(uint256 _tokenId, uint256 amount) private {
     tokenIndexToGroup[_tokenId].purchasePrice = amount;
-    /* linkedContract.purchase(_tokenId); */
+    linkedContract.purchase.value(amount)(_tokenId);
     TokenPurchased(_tokenId, amount);
   }
 }
