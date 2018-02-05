@@ -41,11 +41,18 @@ contract GroupBuyContract {
 
   event FundsWithdrawn(address _to, uint256 balance);
 
-  event Contribution(
+  event JoinGroup(
     uint256 _tokenId,
     address contributor,
     uint256 groupBalance,
-    uint256 netChange
+    uint256 contributionAdded
+  );
+
+  event LeaveGroup(
+    uint256 _tokenId,
+    address contributor,
+    uint256 groupBalance,
+    uint256 contributionSubtracted
   );
 
   event TokenPurchased(uint256 _tokenId, uint256 balance);
@@ -60,6 +67,7 @@ contract GroupBuyContract {
   mapping(address => Contributor) private userAddressToContributor;
 
   uint256 public groupCount;
+  uint256 public commissionBalance;
   uint256 public usersBalance;
 
   CelebrityToken public linkedContract;
@@ -146,7 +154,7 @@ contract GroupBuyContract {
     groupIds = contributor.groupArr;
   }
 
-  /// @notice Get list of tokenIds of the groups user contributed to
+  /// @notice Retrieve price at which token group purchased token at
   function getGroupPurchasedPrice(uint256 _tokenId) public view returns (uint256 price) {
     var group = tokenIndexToGroup[_tokenId];
     require(group.exists);
@@ -243,7 +251,7 @@ contract GroupBuyContract {
 
     usersBalance += msg.value;
 
-    Contribution(
+    JoinGroup(
       _tokenId,
       userAdd,
       tokenIndexToGroup[_tokenId].contributedBalance,
@@ -255,9 +263,21 @@ contract GroupBuyContract {
     }
   }
 
-  /// @notice Allow user to withdraw contribution to purchase group
+  /* /// @notice Allow redistribution of funds after sale
+  /// @param _tokenId The ID of the Token purchase group
+  function redistributeSaleProceeds(uint256 _tokenId) public view onlyCOO {
+    var group = tokenIndexToGroup[_tokenId];
+
+    // Safety check to make sure group had been sold
+    require(group.purchasePrice > 0);
+
+
+  } */
+
+  /// @notice Allow user to leave purchase group; note that their contribution
+  ///  will be added to their withdrawable balance, and not directly refunded
   /// @param _tokenId The ID of the Token purchase group to be left
-  function withdrawFromTokenGroup(uint256 _tokenId) public {
+  function leaveTokenGroup(uint256 _tokenId) public {
     address userAdd = msg.sender;
 
     var group = tokenIndexToGroup[_tokenId];
@@ -278,7 +298,6 @@ contract GroupBuyContract {
     uint cIndex = group.addressToContributorArrIndex[userAdd] - 1;
     uint lastCIndex = group.contributorArr.length - 1;
     uint refundBalance = group.addressToContribution[userAdd];
-    address lastAddress = group.contributorArr[lastCIndex];
 
     // clear contribution record in group
     tokenIndexToGroup[_tokenId].addressToContributorArrIndex[userAdd] = 0;
@@ -286,8 +305,8 @@ contract GroupBuyContract {
 
     // move address in last position to deleted contributor's spot
     if (lastCIndex > 0) {
-      tokenIndexToGroup[_tokenId].addressToContributorArrIndex[lastAddress] = cIndex;
-      tokenIndexToGroup[_tokenId].contributorArr[cIndex] = lastAddress;
+      tokenIndexToGroup[_tokenId].addressToContributorArrIndex[group.contributorArr[lastCIndex]] = cIndex;
+      tokenIndexToGroup[_tokenId].contributorArr[cIndex] = group.contributorArr[lastCIndex];
     }
 
     tokenIndexToGroup[_tokenId].contributorArr.length -= 1;
@@ -297,27 +316,23 @@ contract GroupBuyContract {
     //  in a mapping.
     uint gIndex = contributor.tokenIdToGroupArrIndex[_tokenId] - 1;
     uint lastGIndex = contributor.groupArr.length - 1;
-    uint lastTokenId = contributor.groupArr[lastGIndex];
 
     // clear group record in Contributor
     userAddressToContributor[userAdd].tokenIdToGroupArrIndex[_tokenId] = 0;
 
     // move tokenId in last position to deleted group record's spot
     if (lastGIndex > 0) {
-      userAddressToContributor[userAdd].tokenIdToGroupArrIndex[lastTokenId] = gIndex;
-      userAddressToContributor[userAdd].groupArr[gIndex] = lastTokenId;
+      userAddressToContributor[userAdd].tokenIdToGroupArrIndex[contributor.groupArr[lastGIndex]] = gIndex;
+      userAddressToContributor[userAdd].groupArr[gIndex] = contributor.groupArr[lastGIndex];
     }
 
-    usersBalance -= refundBalance;
-
     userAddressToContributor[userAdd].withdrawableBalance += refundBalance;
-    //userAdd.transfer(refundBalance); // DO WE WANT TO USE WITHDRAWAL METHOD INSTEAD
 
-    Contribution(
+    LeaveGroup(
       _tokenId,
       userAdd,
       tokenIndexToGroup[_tokenId].contributedBalance,
-      SafeMath.mul(uint256(-1), refundBalance)
+      refundBalance
     );
   }
 
@@ -328,6 +343,7 @@ contract GroupBuyContract {
     require(contributor.exists);
 
     uint256 balance = contributor.withdrawableBalance;
+    usersBalance -= balance;
     contributor.withdrawableBalance = 0;
 
     if (balance > 0) {
@@ -368,6 +384,7 @@ contract GroupBuyContract {
 
   function _purchase(uint256 _tokenId, uint256 amount) private {
     tokenIndexToGroup[_tokenId].purchasePrice = amount;
+    usersBalance -= amount;
     linkedContract.purchase.value(amount)(_tokenId);
     TokenPurchased(_tokenId, amount);
   }
