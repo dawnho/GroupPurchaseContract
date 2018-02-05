@@ -6,7 +6,9 @@ import "./CelebrityToken.sol";
 contract GroupBuyContract {
   /*** CONSTANTS ***/
   bool public isGroupBuy = true;
-  uint256 public constant MAX_CONTRIBUTION_SLOTS = 20; // Check
+  uint256 public constant MAX_CONTRIBUTION_SLOTS = 20;
+  uint256 private firstStepLimit =  0.053613 ether;
+  uint256 private secondStepLimit = 0.564957 ether;
 
   /*** DATATYPES ***/
   // @dev A Group is created for all the contributors who want to contribute
@@ -37,10 +39,16 @@ contract GroupBuyContract {
   }
 
   /*** EVENTS ***/
+  // @notice Event signifiying that contract received funds via fallback fn
   event FundsReceived(address _from, uint256 amount);
 
-  event FundsWithdrawn(address _to, uint256 balance);
+  // @notice Event for notifying user that proceeds from a token have been distributed
+  event FundsRedistributed(uint256 _tokenId, address _to, uint256 amount);
 
+  // @notice Event for whenever funds were withdrawn from contract
+  event FundsWithdrawn(address _to, uint256 amount);
+
+  // @notice Event for when a contributor joins a token group
   event JoinGroup(
     uint256 _tokenId,
     address contributor,
@@ -48,6 +56,7 @@ contract GroupBuyContract {
     uint256 contributionAdded
   );
 
+  // @notice Event for when a contributor leaves a token group
   event LeaveGroup(
     uint256 _tokenId,
     address contributor,
@@ -55,9 +64,8 @@ contract GroupBuyContract {
     uint256 contributionSubtracted
   );
 
+  // @notice Event for when a token group purchases a token
   event TokenPurchased(uint256 _tokenId, uint256 balance);
-
-  event TokenSold(address _to, uint256 balance);
 
   /*** STORAGE ***/
   /// @dev A mapping from token IDs to the group associated with that token.
@@ -263,16 +271,44 @@ contract GroupBuyContract {
     }
   }
 
-  /* /// @notice Allow redistribution of funds after sale
+  /// @notice Allow redistribution of funds after sale
   /// @param _tokenId The ID of the Token purchase group
-  function redistributeSaleProceeds(uint256 _tokenId) public view onlyCOO {
+  function redistributeSaleProceeds(uint256 _tokenId) public onlyCOO {
     var group = tokenIndexToGroup[_tokenId];
 
-    // Safety check to make sure group had been sold
+    // Safety check to make sure group exists and had purchased the token
+    require(group.exists);
     require(group.purchasePrice > 0);
 
+    // Safety check to make sure token had been sold
+    uint256 currPrice = linkedContract.priceOf(_tokenId);
+    uint256 soldPrice = _newPrice(group.purchasePrice);
+    require(currPrice > soldPrice);
 
-  } */
+    uint256 paymentIntoContract = uint256(SafeMath.div(SafeMath.mul(soldPrice, 94), 100));
+    uint256 fundsForDistribution = uint256(SafeMath.div(SafeMath.mul(paymentIntoContract, 97), 100));
+
+    commissionBalance += uint256(SafeMath.sub(paymentIntoContract, fundsForDistribution));
+
+    for (uint i = 0; i < group.contributorArr.length; i++) {
+      address userAdd = group.contributorArr[i];
+
+      // calculate contributor's sale proceeds and add to their withdrawable balance
+      uint256 userProceeds = uint256(SafeMath.div(SafeMath.mul(fundsForDistribution,
+        group.addressToContribution[userAdd]), group.contributedBalance));
+      userAddressToContributor[userAdd].withdrawableBalance += userProceeds;
+
+      _clearGroupRecordInContributor(_tokenId, userAdd);
+
+      // clear contributor record on group
+      tokenIndexToGroup[_tokenId].addressToContribution[userAdd] = 0;
+      tokenIndexToGroup[_tokenId].addressToContributorArrIndex[userAdd] = 0;
+      FundsRedistributed(_tokenId, userAdd, userProceeds);
+    }
+    tokenIndexToGroup[_tokenId].contributorArr.length = 0;
+    tokenIndexToGroup[_tokenId].contributedBalance = 0;
+    tokenIndexToGroup[_tokenId].purchasePrice = 0;
+  }
 
   /// @notice Allow user to leave purchase group; note that their contribution
   ///  will be added to their withdrawable balance, and not directly refunded
@@ -312,19 +348,7 @@ contract GroupBuyContract {
     tokenIndexToGroup[_tokenId].contributorArr.length -= 1;
     tokenIndexToGroup[_tokenId].contributedBalance -= refundBalance;
 
-    // Index saved is 1 + the array's index, b/c 0 is the default value
-    //  in a mapping.
-    uint gIndex = contributor.tokenIdToGroupArrIndex[_tokenId] - 1;
-    uint lastGIndex = contributor.groupArr.length - 1;
-
-    // clear group record in Contributor
-    userAddressToContributor[userAdd].tokenIdToGroupArrIndex[_tokenId] = 0;
-
-    // move tokenId in last position to deleted group record's spot
-    if (lastGIndex > 0) {
-      userAddressToContributor[userAdd].tokenIdToGroupArrIndex[contributor.groupArr[lastGIndex]] = gIndex;
-      userAddressToContributor[userAdd].groupArr[gIndex] = contributor.groupArr[lastGIndex];
-    }
+    _clearGroupRecordInContributor(_tokenId, userAdd);
 
     userAddressToContributor[userAdd].withdrawableBalance += refundBalance;
 
@@ -380,6 +404,37 @@ contract GroupBuyContract {
   /// Safety check on _to address to prevent against an unexpected 0x0 default.
   function _addressNotNull(address _to) private pure returns (bool) {
     return _to != address(0);
+  }
+
+  function _clearGroupRecordInContributor(uint256 _tokenId, address _userAdd) private {
+    // Index saved is 1 + the array's index, b/c 0 is the default value
+    //  in a mapping.
+    uint gIndex = userAddressToContributor[_userAdd].tokenIdToGroupArrIndex[_tokenId] - 1;
+    uint lastGIndex = userAddressToContributor[_userAdd].groupArr.length - 1;
+
+    // clear group record in Contributor
+    userAddressToContributor[_userAdd].tokenIdToGroupArrIndex[_tokenId] = 0;
+
+    // move tokenId in last position to deleted group record's spot
+    if (lastGIndex > 0) {
+      userAddressToContributor[_userAdd].tokenIdToGroupArrIndex[userAddressToContributor[_userAdd].groupArr[lastGIndex]] = gIndex;
+      userAddressToContributor[_userAdd].groupArr[gIndex] = userAddressToContributor[_userAdd].groupArr[lastGIndex];
+    }
+
+    userAddressToContributor[_userAdd].groupArr.length -= 1;
+  }
+
+  function _newPrice(uint256 oldPrice) private view returns (uint256 newPrice) {
+    if (oldPrice < firstStepLimit) {
+      // first stage
+      newPrice = SafeMath.div(SafeMath.mul(oldPrice, 200), 94);
+    } else if (oldPrice < secondStepLimit) {
+      // second stage
+      newPrice = SafeMath.div(SafeMath.mul(oldPrice, 120), 94);
+    } else {
+      // third stage
+      newPrice = SafeMath.div(SafeMath.mul(oldPrice, 115), 94);
+    }
   }
 
   function _purchase(uint256 _tokenId, uint256 amount) private {
