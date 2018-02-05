@@ -37,7 +37,9 @@ contract GroupBuyContract {
   }
 
   /*** EVENTS ***/
-  event FundsReceived(uint256 amount, address _from);
+  event FundsReceived(address _from, uint256 amount);
+
+  event FundsWithdrawn(address _to, uint256 balance);
 
   event Contribution(
     uint256 _tokenId,
@@ -48,7 +50,7 @@ contract GroupBuyContract {
 
   event TokenPurchased(uint256 _tokenId, uint256 balance);
 
-  event TokenSold(uint256 balance, address origin);
+  event TokenSold(address _to, uint256 balance);
 
   /*** STORAGE ***/
   /// @dev A mapping from token IDs to the group associated with that token.
@@ -107,7 +109,7 @@ contract GroupBuyContract {
   /*** PUBLIC FUNCTIONS ***/
   /// @notice Fallback fn for receiving ether
   function () public payable {
-    FundsReceived(msg.value, msg.sender);
+    FundsReceived(msg.sender, msg.value);
   }
 
   /** Contract Verification Fns **/
@@ -135,8 +137,12 @@ contract GroupBuyContract {
 
   /// @notice Get list of tokenIds of the groups user contributed to
   function getGroupsContributedTo() public view returns (uint256[] groupIds) {
+    // Safety check to prevent against an unexpected 0x0 default.
+    require(_addressNotNull(msg.sender));
+
     var contributor = userAddressToContributor[msg.sender];
     require(contributor.exists);
+
     groupIds = contributor.groupArr;
   }
 
@@ -150,8 +156,12 @@ contract GroupBuyContract {
 
   /// @notice Get withdrawable balance from sale proceeds
   function getWithdrawableBalance() public view returns (uint256 balance) {
+    // Safety check to prevent against an unexpected 0x0 default.
+    require(_addressNotNull(msg.sender));
+
     var contributor = userAddressToContributor[msg.sender];
     require(contributor.exists);
+
     balance = contributor.withdrawableBalance;
   }
 
@@ -309,6 +319,21 @@ contract GroupBuyContract {
       tokenIndexToGroup[_tokenId].contributedBalance,
       SafeMath.mul(uint256(-1), refundBalance)
     );
+  }
+
+  /// @notice Get withdrawable balance from sale proceeds
+  function withdrawBalance() public {
+    require(_addressNotNull(msg.sender));
+    var contributor = userAddressToContributor[msg.sender];
+    require(contributor.exists);
+
+    uint256 balance = contributor.withdrawableBalance;
+    contributor.withdrawableBalance = 0;
+
+    if (balance > 0) {
+      msg.sender.transfer(balance);
+      FundsWithdrawn(msg.sender, balance);
+    }
   }
 
   /// @dev Assigns a new address to act as the CEO. Only available to the current CEO.

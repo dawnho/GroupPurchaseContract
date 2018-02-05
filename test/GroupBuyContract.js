@@ -103,24 +103,36 @@ contract("GroupBuyContract", accounts => {
 
     it("should purchase token when enough contributed", async () => {
       let tokenId = 1;
-      let contribution = 1800;
-      let contributionBalance, purchasePrice;
+      let contributionNeeded = 1700;
+      let excessBalance = 100;
+
+      let oldAcctBalance, gasUsed;
 
       return groupBuy.contributeToTokenGroup(tokenId, {
         from: account_three,
-        value: contribution
+        value: contributionNeeded + excessBalance
       }).then(() => {
         return groupBuy.getContributionBalanceForTokenGroup(tokenId, {from: account_three});
       }).then(balance => {
-        contributionBalance = balance;
+        assert.equal(balance.toNumber(), contributionNeeded);
         return groupBuy.getGroupPurchasedPrice(tokenId, {from: account_three});
       }).then(price => {
-        purchasePrice = price;
+        assert.equal(price, 2000);
         return celeb.ownerOf(tokenId, {from: account_three});
       }).then(address => {
-        assert.equal(contributionBalance.toNumber(), 1700);
-        assert.equal(purchasePrice, 2000);
         assert.equal(address, GroupBuyContract.address, "Contract Address was set incorrectly");
+        return groupBuy.getWithdrawableBalance({from: account_three});
+      }).then(balance => {
+        assert.equal(balance, excessBalance);
+        return web3.eth.getBalance(account_three);
+      }).then(balance => {
+        oldAcctBalance = balance;
+        return groupBuy.withdrawBalance({from: account_three});
+      }).then(trans => {
+        gasUsed = trans.receipt.gasUsed * 100000000000;
+        return web3.eth.getBalance(account_three);
+      }).then(balance => {
+        assert.equal(parseInt(oldAcctBalance) - gasUsed + excessBalance, balance);
       });
     });
   });
