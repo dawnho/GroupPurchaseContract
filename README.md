@@ -1,5 +1,11 @@
-Group Buy Contract
+## Group Buy Contract
 
-To run tests:
-run `ganache-cli -a 20`
-run `npm test`
+Group Buy Contract for purchasing CryptoCelebrities tokens
+
+To use:
+1. Install dependencies
+`npm install`
+2. Spin up a ganache server with 20 test accts
+`ganache-cli -a 20 -p 7545`
+3. Run tests
+`npm test`

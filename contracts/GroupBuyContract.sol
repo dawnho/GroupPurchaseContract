@@ -86,9 +86,9 @@ contract GroupBuyContract {
   CelebrityToken public linkedContract;
 
   // The addresses of the accounts (or contracts) that can execute actions within each roles.
-  address private ceoAddress;
-  address private cooAddress;
-  address private cfoAddress;
+  address public ceoAddress;
+  address public cooAddress;
+  address public cfoAddress;
 
   /*** ACCESS MODIFIERS ***/
   /// @dev Access modifier for CEO-only functionality
@@ -199,14 +199,16 @@ contract GroupBuyContract {
   ///  requires sender to be a member of the group or CLevel
   /// @param _tokenId The ID of the Token purchase group to be joined
   function activatePurchase(uint256 _tokenId) public {
+    var group = tokenIndexToGroup[_tokenId];
     require(group.addressToContribution[msg.sender] > 0 ||
             msg.sender == ceoAddress ||
             msg.sender == cooAddress ||
             msg.sender == cfoAddress);
-    var group = tokenIndexToGroup[_tokenId];
-    var price = linkedContract.priceOf(_tokenId);
+
     // Safety check that enough money has been contributed to group
+    var price = linkedContract.priceOf(_tokenId);
     require(group.contributedBalance >= price);
+
     // Safety check that token had not be purchased yet
     require(group.purchasePrice == 0);
 
@@ -217,34 +219,33 @@ contract GroupBuyContract {
   /// @param _tokenId The ID of the Token purchase group to be joined
   function contributeToTokenGroup(uint256 _tokenId) public payable {
     address userAdd = msg.sender;
-    var group = tokenIndexToGroup[_tokenId];
-    var contributor = userAddressToContributor[userAdd];
-
     // Safety check to prevent against an unexpected 0x0 default.
     require(_addressNotNull(userAdd));
 
     /// Safety check to make sure contributor has not already joined this group buy
-    if (!group.exists) {
+    var group = tokenIndexToGroup[_tokenId];
+    var contributor = userAddressToContributor[userAdd];
+    if (!group.exists) { // Create group if not exists
       group.exists = true;
       groupCount += 1;
     } else {
       require(group.addressToContributorArrIndex[userAdd] == 0);
     }
 
-    if (!contributor.exists) {
+    if (!contributor.exists) { // Create contributor if not exists
       userAddressToContributor[userAdd].exists = true;
     } else {
-      require(userAddressToContributor[userAdd].tokenIdToGroupArrIndex[_tokenId] == 0);
+      require(contributor.tokenIdToGroupArrIndex[_tokenId] == 0);
     }
 
-    // Safety check to make sure group hasn't purchased token already
+    // Safety check to make sure group isn't currently holding onto token
+    //  or has a group record stored (for redistribution)
     require(group.purchasePrice == 0);
 
-    uint256 tokenPrice = linkedContract.priceOf(_tokenId);
-
-    /// Safety check to ensure amount contributed is higher than min portion of the
+    /// Safety check to ensure amount contributed is higher than min portion of
     ///  purchase price
-    require(msg.value >= SafeMath.div(tokenPrice, MAX_CONTRIBUTION_SLOTS));
+    uint256 tokenPrice = linkedContract.priceOf(_tokenId);
+    require(msg.value >= uint256(SafeMath.div(tokenPrice, MAX_CONTRIBUTION_SLOTS)));
 
     // Index saved is 1 + the array's index, b/c 0 is the default value in a mapping,
     //  so as stored on the mapping, array index will begin at 1
@@ -274,6 +275,7 @@ contract GroupBuyContract {
       tokenIndexToGroup[_tokenId].addressToContribution[userAdd]
     );
 
+    // Purchase token if enough funds contributed
     if (tokenIndexToGroup[_tokenId].contributedBalance >= tokenPrice) {
       _purchase(_tokenId, tokenPrice);
     }
@@ -429,8 +431,8 @@ contract GroupBuyContract {
     return _to != address(0);
   }
 
-  /// @dev Clears record of a group from the Contributor's record
-  /// @param _tokenId Token ID of group to be cleared
+  /// @dev Clears record of a Group from a Contributor's record
+  /// @param _tokenId Token ID of Group to be cleared
   /// @param _userAdd Address of Contributor
   function _clearGroupRecordInContributor(uint256 _tokenId, address _userAdd) private {
     // Index saved is 1 + the array's index, b/c 0 is the default value
@@ -438,10 +440,10 @@ contract GroupBuyContract {
     uint gIndex = userAddressToContributor[_userAdd].tokenIdToGroupArrIndex[_tokenId] - 1;
     uint lastGIndex = userAddressToContributor[_userAdd].groupArr.length - 1;
 
-    // clear group record in Contributor
+    // clear Group record in Contributor
     userAddressToContributor[_userAdd].tokenIdToGroupArrIndex[_tokenId] = 0;
 
-    // move tokenId in last position to deleted group record's spot
+    // move tokenId from end of array to deleted Group record's spot
     if (lastGIndex > 0) {
       userAddressToContributor[_userAdd].tokenIdToGroupArrIndex[userAddressToContributor[_userAdd].groupArr[lastGIndex]] = gIndex;
       userAddressToContributor[_userAdd].groupArr[gIndex] = userAddressToContributor[_userAdd].groupArr[lastGIndex];
