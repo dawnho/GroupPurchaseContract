@@ -376,6 +376,18 @@ contract GroupBuyContract {
     }
   }
 
+  /// @notice Withdraw sale commission
+  function withdrawCommission(address _to) public onlyCFO {
+    uint256 balance = commissionBalance;
+    commissionBalance = 0;
+    if (_to == address(0)) {
+      cfoAddress.transfer(balance);
+    } else {
+      _to.transfer(balance);
+    }
+    FundsWithdrawn(cfoAddress, balance); // FIX THISDSDFSDFSD
+  }
+
   /// @dev Assigns a new address to act as the CEO. Only available to the current CEO.
   /// @param _newCEO The address of the new CEO
   function setCEO(address _newCEO) public onlyCEO {
