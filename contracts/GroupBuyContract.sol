@@ -39,6 +39,8 @@ contract GroupBuyContract {
   }
 
   /*** EVENTS ***/
+  event Commission(uint256 _tokenId, uint256 amount);
+
   // @notice Event signifiying that contract received funds via fallback fn
   event FundsReceived(address _from, uint256 amount);
 
@@ -287,8 +289,7 @@ contract GroupBuyContract {
 
     uint256 paymentIntoContract = uint256(SafeMath.div(SafeMath.mul(soldPrice, 94), 100));
     uint256 fundsForDistribution = uint256(SafeMath.div(SafeMath.mul(paymentIntoContract, 97), 100));
-
-    commissionBalance += uint256(SafeMath.sub(paymentIntoContract, fundsForDistribution));
+    uint256 commission = paymentIntoContract;
 
     for (uint i = 0; i < group.contributorArr.length; i++) {
       address userAdd = group.contributorArr[i];
@@ -303,8 +304,12 @@ contract GroupBuyContract {
       // clear contributor record on group
       tokenIndexToGroup[_tokenId].addressToContribution[userAdd] = 0;
       tokenIndexToGroup[_tokenId].addressToContributorArrIndex[userAdd] = 0;
+      commission -= userProceeds;
       FundsRedistributed(_tokenId, userAdd, userProceeds);
     }
+
+    commissionBalance += commission;
+    Commission(_tokenId, commission);
     tokenIndexToGroup[_tokenId].contributorArr.length = 0;
     tokenIndexToGroup[_tokenId].contributedBalance = 0;
     tokenIndexToGroup[_tokenId].purchasePrice = 0;

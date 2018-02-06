@@ -241,33 +241,33 @@ contract("GroupBuyContract", accounts => {
       });
 
       describe("After Sale", () => {
-        before(() => {
-          return celeb.purchase(1, {from: account_four, value: 100000});
-        });
-
-        it("should throw if anyone other than coo initiates redistribution", () => {
-          return groupBuy.redistributeSaleProceeds(1, {from: account_two})
-          .then(tx => {
-            expect(tx.receipt.status).to.equal('0x00', 'transaction should fail');
-          });
-        });
-
         it("should redistribute funds correctly", () => {
-          var eventName = "FundsRedistributed";
-          var contrib = [100, 200, 1700];
-          var wholeContribution = 2000;
-          var distributableFunds = parseInt(4000*97/100);
+          var fundsReceived;
           var sumFunds = 0;
 
-          return groupBuy.redistributeSaleProceeds(1, {from: account_one}).then(tx => {
+          return celeb.purchase(1, {
+            from: account_four,
+            value: 1000000
+          }).then(() => {
+            return utils.collectEvents(groupBuy, "FundsReceived");
+          }).then(events => {
+            fundsReceived = events[0].amount.toNumber();
+            return groupBuy.redistributeSaleProceeds(1, {from: account_two});
+          }).then(tx => {
+              expect(tx.receipt.status).to.equal('0x00', 'should throw if anyone other than coo initiates redistribution');
+          }).then(() => {
+            return groupBuy.redistributeSaleProceeds(1, {from: account_one});
+          }).then(tx => {
             expect(tx.receipt.status).to.equal('0x01', 'transaction should succeed');
-            return utils.collectEvents(groupBuy, eventName);
+            return utils.collectEvents(groupBuy, "FundsRedistributed");
           }).then(events => {
             _.each(events, e => {
               sumFunds += e.amount.toNumber();
             });
-            expect((sumFunds - 5) < distributableFunds).to.be.true;
-            expect((sumFunds + 5) > distributableFunds).to.be.true;
+            return utils.collectEvents(groupBuy, "Commission");
+          }).then(events => {
+            sumFunds += events[0].amount.toNumber();
+            expect(fundsReceived).to.equal(sumFunds);
           });
         });
       });
@@ -288,23 +288,29 @@ contract("GroupBuyContract", accounts => {
         });
 
         it("should redistribute funds correctly", () => {
-          var eventName = "FundsRedistributed";
-          var contrib = [100, 200, 1700];
-          var wholeContribution = 2000;
-          var distributableFunds = parseInt(4000*97/100);
+          var fundsReceived;
           var sumFunds = 0;
 
-          return groupBuy.redistributeSaleProceeds(2, {from: account_one}).then(tx => {
+          return celeb.purchase(2, {
+            from: account_one,
+            value: 1000000
+          }).then(() => {
+            return utils.collectEvents(groupBuy, "FundsReceived");
+          }).then(events => {
+            fundsReceived = events[0].amount.toNumber();
+          }).then(() => {
+            return groupBuy.redistributeSaleProceeds(2, {from: account_one});
+          }).then(tx => {
             expect(tx.receipt.status).to.equal('0x01', 'transaction should succeed');
-            return utils.collectEvents(groupBuy, eventName);
+            return utils.collectEvents(groupBuy, "FundsRedistributed");
           }).then(events => {
             _.each(events, e => {
               sumFunds += e.amount.toNumber();
             });
-            console.log('sum', sumFunds);
-            console.log(distributableFunds);
-            expect((sumFunds - 5) < distributableFunds).to.be.true;
-            expect((sumFunds + 5) > distributableFunds).to.be.true;
+            return utils.collectEvents(groupBuy, "Commission");
+          }).then(events => {
+            sumFunds += events[0].amount.toNumber();
+            expect(fundsReceived).to.equal(sumFunds);
           });
         });
       });
