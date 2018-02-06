@@ -78,7 +78,6 @@ contract GroupBuyContract {
 
   uint256 public groupCount;
   uint256 public commissionBalance;
-  uint256 public usersBalance;
 
   CelebrityToken public linkedContract;
 
@@ -192,6 +191,9 @@ contract GroupBuyContract {
   }
 
   /** Action Fns **/
+  /// @notice Backup function for activating token purchase
+  ///  requires sender to be a member of the group or CLevel
+  /// @param _tokenId The ID of the Token purchase group to be joined
   function activatePurchase(uint256 _tokenId) public {
     var group = tokenIndexToGroup[_tokenId];
     require(group.addressToContribution[msg.sender] > 0 ||
@@ -199,9 +201,10 @@ contract GroupBuyContract {
             msg.sender == cooAddress ||
             msg.sender == cfoAddress);
     var price = linkedContract.priceOf(_tokenId);
+    // Safety check that enough money has been contributed to group
     require(group.contributedBalance >= price);
-
-    group.contributedBalance -= price;
+    // Safety check that token had not be purchased yet
+    require(group.purchasePrice == 0);
 
     _purchase(_tokenId, price);
   }
@@ -258,8 +261,6 @@ contract GroupBuyContract {
     //  so as stored on the mapping, array index will begin at 1
     uint256 gIndex = userAddressToContributor[userAdd].groupArr.push(_tokenId);
     userAddressToContributor[userAdd].tokenIdToGroupArrIndex[_tokenId] = gIndex;
-
-    usersBalance += msg.value;
 
     JoinGroup(
       _tokenId,
@@ -365,14 +366,13 @@ contract GroupBuyContract {
     );
   }
 
-  /// @notice Get withdrawable balance from sale proceeds
+  /// @dev Withdraw balance from own account
   function withdrawBalance() public {
     require(_addressNotNull(msg.sender));
     var contributor = userAddressToContributor[msg.sender];
     require(contributor.exists);
 
     uint256 balance = contributor.withdrawableBalance;
-    usersBalance -= balance;
     contributor.withdrawableBalance = 0;
 
     if (balance > 0) {
@@ -381,16 +381,16 @@ contract GroupBuyContract {
     }
   }
 
-  /// @notice Withdraw sale commission
+  /// @dev Withdraws sale commission, CFO-only functionality
+  /// @param _to Address for commission to be sent to
   function withdrawCommission(address _to) public onlyCFO {
     uint256 balance = commissionBalance;
+    address transferee = (_to == address(0)) ? cfoAddress : _to;
     commissionBalance = 0;
-    if (_to == address(0)) {
-      cfoAddress.transfer(balance);
-    } else {
-      _to.transfer(balance);
+    if (balance > 0) {
+      transferee.transfer(balance);
     }
-    FundsWithdrawn(cfoAddress, balance); // FIX THISDSDFSDFSD
+    FundsWithdrawn(transferee, balance);
   }
 
   /// @dev Assigns a new address to act as the CEO. Only available to the current CEO.
@@ -418,11 +418,15 @@ contract GroupBuyContract {
   }
 
   /*** PRIVATE FUNCTIONS ***/
-  /// Safety check on _to address to prevent against an unexpected 0x0 default.
+  /// @dev Safety check on _to address to prevent against an unexpected 0x0 default.
+  /// @param _to Address to be checked
   function _addressNotNull(address _to) private pure returns (bool) {
     return _to != address(0);
   }
 
+  /// @dev Clears record of a group from the Contributor's record
+  /// @param _tokenId Token ID of group to be cleared
+  /// @param _userAdd Address of Contributor
   function _clearGroupRecordInContributor(uint256 _tokenId, address _userAdd) private {
     // Index saved is 1 + the array's index, b/c 0 is the default value
     //  in a mapping.
@@ -441,23 +445,27 @@ contract GroupBuyContract {
     userAddressToContributor[_userAdd].groupArr.length -= 1;
   }
 
-  function _newPrice(uint256 oldPrice) private view returns (uint256 newPrice) {
-    if (oldPrice < firstStepLimit) {
+  /// @dev Calculates next price of celebrity token
+  /// @param _oldPrice Previous price
+  function _newPrice(uint256 _oldPrice) private view returns (uint256 newPrice) {
+    if (_oldPrice < firstStepLimit) {
       // first stage
-      newPrice = SafeMath.div(SafeMath.mul(oldPrice, 200), 94);
-    } else if (oldPrice < secondStepLimit) {
+      newPrice = SafeMath.div(SafeMath.mul(_oldPrice, 200), 94);
+    } else if (_oldPrice < secondStepLimit) {
       // second stage
-      newPrice = SafeMath.div(SafeMath.mul(oldPrice, 120), 94);
+      newPrice = SafeMath.div(SafeMath.mul(_oldPrice, 120), 94);
     } else {
       // third stage
-      newPrice = SafeMath.div(SafeMath.mul(oldPrice, 115), 94);
+      newPrice = SafeMath.div(SafeMath.mul(_oldPrice, 115), 94);
     }
   }
 
-  function _purchase(uint256 _tokenId, uint256 amount) private {
-    tokenIndexToGroup[_tokenId].purchasePrice = amount;
-    usersBalance -= amount;
-    linkedContract.purchase.value(amount)(_tokenId);
-    TokenPurchased(_tokenId, amount);
+  /// @dev Calls CelebrityToken purchase fn and updates records
+  /// @param _tokenId Token ID of token to be purchased
+  /// @param _amount Amount to be paid to CelebrityToken
+  function _purchase(uint256 _tokenId, uint256 _amount) private {
+    tokenIndexToGroup[_tokenId].purchasePrice = _amount;
+    linkedContract.purchase.value(_amount)(_tokenId);
+    TokenPurchased(_tokenId, _amount);
   }
 }
