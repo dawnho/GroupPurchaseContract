@@ -5,7 +5,6 @@ import "./CelebrityToken.sol";
 
 contract GroupBuyContract {
   /*** CONSTANTS ***/
-  bool public isGroupBuy = true;
   uint256 public constant MAX_CONTRIBUTION_SLOTS = 20;
   uint256 private firstStepLimit =  0.053613 ether;
   uint256 private secondStepLimit = 0.564957 ether;
@@ -35,22 +34,27 @@ contract GroupBuyContract {
     // Array of tokenIds contributed to by a contributor
     uint256[] groupArr;
     bool exists;
-    uint256 withdrawableBalance; // ledger for proceeds from group sale
+    // Ledger for withdrawable balance for this user.
+    //  Funds can come from excess paid into a groupBuy,
+    //  or from withdrawing from a group, or from
+    //  sale proceeds from a token.
+    uint256 withdrawableBalance;
   }
 
   /*** EVENTS ***/
+  // @notice Event noting commission paid to contract
   event Commission(uint256 _tokenId, uint256 amount);
 
   // @notice Event signifiying that contract received funds via fallback fn
   event FundsReceived(address _from, uint256 amount);
 
-  // @notice Event for notifying user that proceeds from a token have been distributed
+  // @notice Event noting a fund distribution for user _to from sale of token _tokenId
   event FundsRedistributed(uint256 _tokenId, address _to, uint256 amount);
 
-  // @notice Event for whenever funds were withdrawn from contract
+  // @notice Event marking a withdrawal of amount by user _to
   event FundsWithdrawn(address _to, uint256 amount);
 
-  // @notice Event for when a contributor joins a token group
+  // @notice Event for when a contributor joins a token group _tokenId
   event JoinGroup(
     uint256 _tokenId,
     address contributor,
@@ -82,9 +86,9 @@ contract GroupBuyContract {
   CelebrityToken public linkedContract;
 
   // The addresses of the accounts (or contracts) that can execute actions within each roles.
-  address public ceoAddress;
-  address public cooAddress;
-  address public cfoAddress;
+  address private ceoAddress;
+  address private cooAddress;
+  address private cfoAddress;
 
   /*** ACCESS MODIFIERS ***/
   /// @dev Access modifier for CEO-only functionality
@@ -195,11 +199,11 @@ contract GroupBuyContract {
   ///  requires sender to be a member of the group or CLevel
   /// @param _tokenId The ID of the Token purchase group to be joined
   function activatePurchase(uint256 _tokenId) public {
-    var group = tokenIndexToGroup[_tokenId];
     require(group.addressToContribution[msg.sender] > 0 ||
             msg.sender == ceoAddress ||
             msg.sender == cooAddress ||
             msg.sender == cfoAddress);
+    var group = tokenIndexToGroup[_tokenId];
     var price = linkedContract.priceOf(_tokenId);
     // Safety check that enough money has been contributed to group
     require(group.contributedBalance >= price);
@@ -222,6 +226,7 @@ contract GroupBuyContract {
     /// Safety check to make sure contributor has not already joined this group buy
     if (!group.exists) {
       group.exists = true;
+      groupCount += 1;
     } else {
       require(group.addressToContributorArrIndex[userAdd] == 0);
     }
