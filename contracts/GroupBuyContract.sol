@@ -281,10 +281,10 @@ contract GroupBuyContract {
     }
   }
 
-  /// @notice Allow redistribution of funds after sale,
+  /// @notice Backup fn to allow redistribution of funds after sale,
   ///  for the special scenario where an alternate sale platform is used
   /// @param _tokenId The ID of the Token purchase group
-  /// @param _amount A custom amount of funds
+  /// @param _amount Funds to be redistributed
   function redistributeCustomSaleProceeds(uint256 _tokenId, uint256 _amount) public onlyCOO {
     var group = tokenIndexToGroup[_tokenId];
 
@@ -367,7 +367,7 @@ contract GroupBuyContract {
   ///  contract, for use where a purchase group wants to use an alternate
   ///  selling platform
   /// @param _tokenId The ID of the Token purchase group
-  /// @param _amount A custom amount of funds
+  /// @param _to Address to transfer token to
   function transferToken(uint256 _tokenId, address _to) public onlyCOO {
     var group = tokenIndexToGroup[_tokenId];
 

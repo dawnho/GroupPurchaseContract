@@ -138,20 +138,18 @@ contract("GroupBuyContract", accounts => {
       it("should deposit right amount in user's account", () => {
         let eventName = "FundsWithdrawn";
 
-        var filterFn = o => {
-          return o.event == eventName && o.logIndex == 0 && o.args._to == account_three
-            && o.args.amount.toNumber() == 100;
-        };
-
         return groupBuy.getWithdrawableBalance({from: account_three}).then(balance => {
           assert.equal(100, balance.toNumber());
           return groupBuy.withdrawBalance({from: account_three});
         }).then(tx => {
           expect(tx.receipt.status).to.equal('0x01', 'transaction should succeed');
+          return utils.collectEvents(groupBuy, "FundsWithdrawn");
+        }).then(events => {
+          expect(events[0].amount.toNumber()).to.equal(100);
+          expect(events[0]._to).to.equal(account_three);
           return groupBuy.getWithdrawableBalance({from: account_three});
         }).then(balance => {
           assert.equal(0, balance.toNumber());
-          return utils.assertEvent(groupBuy, eventName, filterFn);
         });
       });
     });
@@ -337,6 +335,32 @@ contract("GroupBuyContract", accounts => {
             sumFunds += events[0].amount.toNumber();
             expect(fundsReceived).to.equal(sumFunds);
           });
+        });
+      });
+    });
+
+    describe("#withdrawCommission", () => {
+      it("should deposit right amount in CFO's account", () => {
+        let eventName = "FundsWithdrawn";
+        let commission;
+
+        var filterFn = o => {
+          return o.event == eventName && o.logIndex == 0 && o.args._to == account_three
+            && o.args.amount.toNumber() == 100;
+        };
+
+        return groupBuy.commissionBalance({from: account_one}).then(balance => {
+          commission = balance.toNumber();
+          return groupBuy.withdrawCommission(account_one, {from: account_one});
+        }).then(tx => {
+          expect(tx.receipt.status).to.equal('0x01', 'transaction should succeed');
+          return utils.collectEvents(groupBuy, "FundsWithdrawn");
+        }).then(events => {
+          expect(events[0].amount.toNumber()).to.equal(commission);
+          expect(events[0]._to).to.equal(account_one);
+          return groupBuy.commissionBalance({from: account_one});
+        }).then(balance => {
+          assert.equal(0, balance.toNumber());
         });
       });
     });
