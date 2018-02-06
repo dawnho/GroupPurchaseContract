@@ -1,6 +1,6 @@
 ## Group Buy Contract
 
-Group Buy Contract for purchasing CryptoCelebrities tokens
+Contract for organizing group purchases of CryptoCelebrities tokens
 
 To use:
 1. Install dependencies:
