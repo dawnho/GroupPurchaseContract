@@ -297,7 +297,7 @@ contract("GroupBuyContract", accounts => {
         });
       });
 
-      describe("Load testing", () => {
+      describe("20 contributors contribute to group", () => {
         before(async () => {
           for (var i = 0; i < 20; i++) {
             await groupBuy.contributeToTokenGroup(2, {

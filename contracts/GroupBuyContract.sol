@@ -281,7 +281,21 @@ contract GroupBuyContract {
     }
   }
 
-  /// @notice Allow redistribution of funds after sale
+  /// @notice Allow redistribution of funds after sale,
+  ///  for the special scenario where an alternate sale platform is used
+  /// @param _tokenId The ID of the Token purchase group
+  /// @param _amount A custom amount of funds
+  function redistributeCustomSaleProceeds(uint256 _tokenId, uint256 _amount) public onlyCOO {
+    var group = tokenIndexToGroup[_tokenId];
+
+    // Safety check to make sure group exists and had purchased the token
+    require(group.exists);
+    require(group.purchasePrice > 0);
+
+    _redistributeProceeds(_tokenId, _amount);
+  }
+
+  /// @notice Allow redistribution of funds after a sale
   /// @param _tokenId The ID of the Token purchase group
   function redistributeSaleProceeds(uint256 _tokenId) public onlyCOO {
     var group = tokenIndexToGroup[_tokenId];
@@ -296,31 +310,7 @@ contract GroupBuyContract {
     require(currPrice > soldPrice);
 
     uint256 paymentIntoContract = uint256(SafeMath.div(SafeMath.mul(soldPrice, 94), 100));
-    uint256 fundsForDistribution = uint256(SafeMath.div(SafeMath.mul(paymentIntoContract, 97), 100));
-    uint256 commission = paymentIntoContract;
-
-    for (uint i = 0; i < group.contributorArr.length; i++) {
-      address userAdd = group.contributorArr[i];
-
-      // calculate contributor's sale proceeds and add to their withdrawable balance
-      uint256 userProceeds = uint256(SafeMath.div(SafeMath.mul(fundsForDistribution,
-        group.addressToContribution[userAdd]), group.contributedBalance));
-      userAddressToContributor[userAdd].withdrawableBalance += userProceeds;
-
-      _clearGroupRecordInContributor(_tokenId, userAdd);
-
-      // clear contributor record on group
-      tokenIndexToGroup[_tokenId].addressToContribution[userAdd] = 0;
-      tokenIndexToGroup[_tokenId].addressToContributorArrIndex[userAdd] = 0;
-      commission -= userProceeds;
-      FundsRedistributed(_tokenId, userAdd, userProceeds);
-    }
-
-    commissionBalance += commission;
-    Commission(_tokenId, commission);
-    tokenIndexToGroup[_tokenId].contributorArr.length = 0;
-    tokenIndexToGroup[_tokenId].contributedBalance = 0;
-    tokenIndexToGroup[_tokenId].purchasePrice = 0;
+    _redistributeProceeds(_tokenId, paymentIntoContract);
   }
 
   /// @notice Allow user to leave purchase group; note that their contribution
@@ -371,6 +361,21 @@ contract GroupBuyContract {
       tokenIndexToGroup[_tokenId].contributedBalance,
       refundBalance
     );
+  }
+
+  /// @notice Backup fn to allow transfer of token out of
+  ///  contract, for use where a purchase group wants to use an alternate
+  ///  selling platform
+  /// @param _tokenId The ID of the Token purchase group
+  /// @param _amount A custom amount of funds
+  function transferToken(uint256 _tokenId, address _to) public onlyCOO {
+    var group = tokenIndexToGroup[_tokenId];
+
+    // Safety check to make sure group exists and had purchased the token
+    require(group.exists);
+    require(group.purchasePrice > 0);
+
+    linkedContract.transfer(_to, _tokenId);
   }
 
   /// @dev Withdraw balance from own account
@@ -474,5 +479,37 @@ contract GroupBuyContract {
     tokenIndexToGroup[_tokenId].purchasePrice = _amount;
     linkedContract.purchase.value(_amount)(_tokenId);
     TokenPurchased(_tokenId, _amount);
+  }
+
+  /// @dev Redistribute proceeds from token purchase
+  /// @param _tokenId Token ID of token to be purchased
+  /// @param _amount Amount paid into contract for token
+  function _redistributeProceeds(uint256 _tokenId, uint256 _amount) private {
+    uint256 fundsForDistribution = uint256(SafeMath.div(SafeMath.mul(_amount, 97), 100));
+    uint256 commission = _amount;
+
+    for (uint i = 0; i < tokenIndexToGroup[_tokenId].contributorArr.length; i++) {
+      address userAdd = tokenIndexToGroup[_tokenId].contributorArr[i];
+
+      // calculate contributor's sale proceeds and add to their withdrawable balance
+      uint256 userProceeds = uint256(SafeMath.div(SafeMath.mul(fundsForDistribution,
+        tokenIndexToGroup[_tokenId].addressToContribution[userAdd]),
+        tokenIndexToGroup[_tokenId].contributedBalance));
+      userAddressToContributor[userAdd].withdrawableBalance += userProceeds;
+
+      _clearGroupRecordInContributor(_tokenId, userAdd);
+
+      // clear contributor record on group
+      tokenIndexToGroup[_tokenId].addressToContribution[userAdd] = 0;
+      tokenIndexToGroup[_tokenId].addressToContributorArrIndex[userAdd] = 0;
+      commission -= userProceeds;
+      FundsRedistributed(_tokenId, userAdd, userProceeds);
+    }
+
+    commissionBalance += commission;
+    Commission(_tokenId, commission);
+    tokenIndexToGroup[_tokenId].contributorArr.length = 0;
+    tokenIndexToGroup[_tokenId].contributedBalance = 0;
+    tokenIndexToGroup[_tokenId].purchasePrice = 0;
   }
 }
