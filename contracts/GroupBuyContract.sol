@@ -74,21 +74,21 @@ contract GroupBuyContract {
   event TokenPurchased(uint256 _tokenId, uint256 balance);
 
   /*** STORAGE ***/
+  // The addresses of the accounts (or contracts) that can execute actions within each roles.
+  address public ceoAddress;
+  address public cfoAddress;
+  address public cooAddress;
+
+  uint256 public commissionBalance;
+  uint256 public groupCount;
+
+  CelebrityToken public linkedContract;
+
   /// @dev A mapping from token IDs to the group associated with that token.
   mapping(uint256 => Group) private tokenIndexToGroup;
 
   // @dev A mapping from owner address to available balance not held by a Group.
   mapping(address => Contributor) private userAddressToContributor;
-
-  uint256 public groupCount;
-  uint256 public commissionBalance;
-
-  CelebrityToken public linkedContract;
-
-  // The addresses of the accounts (or contracts) that can execute actions within each roles.
-  address public ceoAddress;
-  address public cooAddress;
-  address public cfoAddress;
 
   /*** ACCESS MODIFIERS ***/
   /// @dev Access modifier for CEO-only functionality
