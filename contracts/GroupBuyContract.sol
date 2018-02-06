@@ -79,8 +79,8 @@ contract GroupBuyContract {
   address public cfoAddress;
   address public cooAddress;
 
+  uint256 public activeGroups;
   uint256 public commissionBalance;
-  uint256 public groupCount;
 
   CelebrityToken public linkedContract;
 
@@ -221,7 +221,7 @@ contract GroupBuyContract {
     var contributor = userAddressToContributor[userAdd];
     if (!group.exists) { // Create group if not exists
       group.exists = true;
-      groupCount += 1;
+      activeGroups += 1;
     } else {
       require(group.addressToContributorArrIndex[userAdd] == 0);
     }
@@ -287,6 +287,9 @@ contract GroupBuyContract {
 
     // Safety check to prevent against an unexpected 0x0 default.
     require(_addressNotNull(userAdd));
+
+    // Safety check to make sure group exists;
+    require(group.exists);
 
     // Safety check to make sure group hasn't purchased token already
     require(group.purchasePrice == 0);
@@ -499,6 +502,8 @@ contract GroupBuyContract {
       tokenIndexToGroup[_tokenId].addressToContribution[userAdd] = 0;
       tokenIndexToGroup[_tokenId].addressToContributorArrIndex[userAdd] = 0;
       commission -= userProceeds;
+      activeGroups -= 1;
+      tokenIndexToGroup[_tokenId].exists = false;
       FundsRedistributed(_tokenId, userAdd, userProceeds);
     }
 
