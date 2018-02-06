@@ -576,7 +576,7 @@
       },
       {
         "attributes": {
-          "SourceUnit": 2424,
+          "SourceUnit": 2511,
           "absolutePath": "zeppelin-solidity/contracts/math/SafeMath.sol",
           "file": "zeppelin-solidity/contracts/math/SafeMath.sol",
           "scope": 977,
@@ -2538,7 +2538,7 @@
                               "overloadedDeclarations": [
                                 null
                               ],
-                              "referencedDeclaration": 2438,
+                              "referencedDeclaration": 2525,
                               "type": "function (bool) pure",
                               "value": "require"
                             },
@@ -2579,7 +2579,7 @@
                                       "overloadedDeclarations": [
                                         null
                                       ],
-                                      "referencedDeclaration": 2435,
+                                      "referencedDeclaration": 2522,
                                       "type": "msg",
                                       "value": "msg"
                                     },
@@ -2683,7 +2683,7 @@
                               "overloadedDeclarations": [
                                 null
                               ],
-                              "referencedDeclaration": 2438,
+                              "referencedDeclaration": 2525,
                               "type": "function (bool) pure",
                               "value": "require"
                             },
@@ -2724,7 +2724,7 @@
                                       "overloadedDeclarations": [
                                         null
                                       ],
-                                      "referencedDeclaration": 2435,
+                                      "referencedDeclaration": 2522,
                                       "type": "msg",
                                       "value": "msg"
                                     },
@@ -2828,7 +2828,7 @@
                               "overloadedDeclarations": [
                                 null
                               ],
-                              "referencedDeclaration": 2438,
+                              "referencedDeclaration": 2525,
                               "type": "function (bool) pure",
                               "value": "require"
                             },
@@ -2884,7 +2884,7 @@
                                           "overloadedDeclarations": [
                                             null
                                           ],
-                                          "referencedDeclaration": 2435,
+                                          "referencedDeclaration": 2522,
                                           "type": "msg",
                                           "value": "msg"
                                         },
@@ -2949,7 +2949,7 @@
                                           "overloadedDeclarations": [
                                             null
                                           ],
-                                          "referencedDeclaration": 2435,
+                                          "referencedDeclaration": 2522,
                                           "type": "msg",
                                           "value": "msg"
                                         },
@@ -3096,7 +3096,7 @@
                                   "overloadedDeclarations": [
                                     null
                                   ],
-                                  "referencedDeclaration": 2435,
+                                  "referencedDeclaration": 2522,
                                   "type": "msg",
                                   "value": "msg"
                                 },
@@ -3164,7 +3164,7 @@
                                   "overloadedDeclarations": [
                                     null
                                   ],
-                                  "referencedDeclaration": 2435,
+                                  "referencedDeclaration": 2522,
                                   "type": "msg",
                                   "value": "msg"
                                 },
@@ -3313,7 +3313,7 @@
                               "overloadedDeclarations": [
                                 null
                               ],
-                              "referencedDeclaration": 2438,
+                              "referencedDeclaration": 2525,
                               "type": "function (bool) pure",
                               "value": "require"
                             },
@@ -3377,7 +3377,7 @@
                                       "overloadedDeclarations": [
                                         null
                                       ],
-                                      "referencedDeclaration": 2435,
+                                      "referencedDeclaration": 2522,
                                       "type": "msg",
                                       "value": "msg"
                                     },
@@ -3561,7 +3561,7 @@
                                   "overloadedDeclarations": [
                                     null
                                   ],
-                                  "referencedDeclaration": 2435,
+                                  "referencedDeclaration": 2522,
                                   "type": "msg",
                                   "value": "msg"
                                 },
@@ -3934,7 +3934,7 @@
                               "overloadedDeclarations": [
                                 null
                               ],
-                              "referencedDeclaration": 2438,
+                              "referencedDeclaration": 2525,
                               "type": "function (bool) pure",
                               "value": "require"
                             },
@@ -4656,7 +4656,7 @@
                                   "overloadedDeclarations": [
                                     null
                                   ],
-                                  "referencedDeclaration": 2450,
+                                  "referencedDeclaration": 2537,
                                   "type": "contract CelebrityToken",
                                   "value": "this"
                                 },
@@ -5547,7 +5547,7 @@
                               "overloadedDeclarations": [
                                 null
                               ],
-                              "referencedDeclaration": 2438,
+                              "referencedDeclaration": 2525,
                               "type": "function (bool) pure",
                               "value": "require"
                             },
@@ -6014,7 +6014,7 @@
                               "overloadedDeclarations": [
                                 null
                               ],
-                              "referencedDeclaration": 2435,
+                              "referencedDeclaration": 2522,
                               "type": "msg",
                               "value": "msg"
                             },
@@ -6141,7 +6141,7 @@
                               "overloadedDeclarations": [
                                 null
                               ],
-                              "referencedDeclaration": 2438,
+                              "referencedDeclaration": 2525,
                               "type": "function (bool) pure",
                               "value": "require"
                             },
@@ -6235,7 +6235,7 @@
                               "overloadedDeclarations": [
                                 null
                               ],
-                              "referencedDeclaration": 2438,
+                              "referencedDeclaration": 2525,
                               "type": "function (bool) pure",
                               "value": "require"
                             },
@@ -6334,7 +6334,7 @@
                               "overloadedDeclarations": [
                                 null
                               ],
-                              "referencedDeclaration": 2438,
+                              "referencedDeclaration": 2525,
                               "type": "function (bool) pure",
                               "value": "require"
                             },
@@ -6375,7 +6375,7 @@
                                       "overloadedDeclarations": [
                                         null
                                       ],
-                                      "referencedDeclaration": 2435,
+                                      "referencedDeclaration": 2522,
                                       "type": "msg",
                                       "value": "msg"
                                     },
@@ -6516,7 +6516,7 @@
                                   "isPure": false,
                                   "lValueRequested": false,
                                   "member_name": "div",
-                                  "referencedDeclaration": 2378,
+                                  "referencedDeclaration": 2465,
                                   "type": "function (uint256,uint256) pure returns (uint256)"
                                 },
                                 "children": [
@@ -6526,7 +6526,7 @@
                                       "overloadedDeclarations": [
                                         null
                                       ],
-                                      "referencedDeclaration": 2423,
+                                      "referencedDeclaration": 2510,
                                       "type": "type(library SafeMath)",
                                       "value": "SafeMath"
                                     },
@@ -6571,7 +6571,7 @@
                                       "isPure": false,
                                       "lValueRequested": false,
                                       "member_name": "mul",
-                                      "referencedDeclaration": 2360,
+                                      "referencedDeclaration": 2447,
                                       "type": "function (uint256,uint256) pure returns (uint256)"
                                     },
                                     "children": [
@@ -6581,7 +6581,7 @@
                                           "overloadedDeclarations": [
                                             null
                                           ],
-                                          "referencedDeclaration": 2423,
+                                          "referencedDeclaration": 2510,
                                           "type": "type(library SafeMath)",
                                           "value": "SafeMath"
                                         },
@@ -6727,7 +6727,7 @@
                               "isPure": false,
                               "lValueRequested": false,
                               "member_name": "sub",
-                              "referencedDeclaration": 2398,
+                              "referencedDeclaration": 2485,
                               "type": "function (uint256,uint256) pure returns (uint256)"
                             },
                             "children": [
@@ -6737,7 +6737,7 @@
                                   "overloadedDeclarations": [
                                     null
                                   ],
-                                  "referencedDeclaration": 2423,
+                                  "referencedDeclaration": 2510,
                                   "type": "type(library SafeMath)",
                                   "value": "SafeMath"
                                 },
@@ -6768,7 +6768,7 @@
                                   "overloadedDeclarations": [
                                     null
                                   ],
-                                  "referencedDeclaration": 2435,
+                                  "referencedDeclaration": 2522,
                                   "type": "msg",
                                   "value": "msg"
                                 },
@@ -6945,7 +6945,7 @@
                                           "isPure": false,
                                           "lValueRequested": false,
                                           "member_name": "div",
-                                          "referencedDeclaration": 2378,
+                                          "referencedDeclaration": 2465,
                                           "type": "function (uint256,uint256) pure returns (uint256)"
                                         },
                                         "children": [
@@ -6955,7 +6955,7 @@
                                               "overloadedDeclarations": [
                                                 null
                                               ],
-                                              "referencedDeclaration": 2423,
+                                              "referencedDeclaration": 2510,
                                               "type": "type(library SafeMath)",
                                               "value": "SafeMath"
                                             },
@@ -7000,7 +7000,7 @@
                                               "isPure": false,
                                               "lValueRequested": false,
                                               "member_name": "mul",
-                                              "referencedDeclaration": 2360,
+                                              "referencedDeclaration": 2447,
                                               "type": "function (uint256,uint256) pure returns (uint256)"
                                             },
                                             "children": [
@@ -7010,7 +7010,7 @@
                                                   "overloadedDeclarations": [
                                                     null
                                                   ],
-                                                  "referencedDeclaration": 2423,
+                                                  "referencedDeclaration": 2510,
                                                   "type": "type(library SafeMath)",
                                                   "value": "SafeMath"
                                                 },
@@ -7236,7 +7236,7 @@
                                               "isPure": false,
                                               "lValueRequested": false,
                                               "member_name": "div",
-                                              "referencedDeclaration": 2378,
+                                              "referencedDeclaration": 2465,
                                               "type": "function (uint256,uint256) pure returns (uint256)"
                                             },
                                             "children": [
@@ -7246,7 +7246,7 @@
                                                   "overloadedDeclarations": [
                                                     null
                                                   ],
-                                                  "referencedDeclaration": 2423,
+                                                  "referencedDeclaration": 2510,
                                                   "type": "type(library SafeMath)",
                                                   "value": "SafeMath"
                                                 },
@@ -7291,7 +7291,7 @@
                                                   "isPure": false,
                                                   "lValueRequested": false,
                                                   "member_name": "mul",
-                                                  "referencedDeclaration": 2360,
+                                                  "referencedDeclaration": 2447,
                                                   "type": "function (uint256,uint256) pure returns (uint256)"
                                                 },
                                                 "children": [
@@ -7301,7 +7301,7 @@
                                                       "overloadedDeclarations": [
                                                         null
                                                       ],
-                                                      "referencedDeclaration": 2423,
+                                                      "referencedDeclaration": 2510,
                                                       "type": "type(library SafeMath)",
                                                       "value": "SafeMath"
                                                     },
@@ -7477,7 +7477,7 @@
                                               "isPure": false,
                                               "lValueRequested": false,
                                               "member_name": "div",
-                                              "referencedDeclaration": 2378,
+                                              "referencedDeclaration": 2465,
                                               "type": "function (uint256,uint256) pure returns (uint256)"
                                             },
                                             "children": [
@@ -7487,7 +7487,7 @@
                                                   "overloadedDeclarations": [
                                                     null
                                                   ],
-                                                  "referencedDeclaration": 2423,
+                                                  "referencedDeclaration": 2510,
                                                   "type": "type(library SafeMath)",
                                                   "value": "SafeMath"
                                                 },
@@ -7532,7 +7532,7 @@
                                                   "isPure": false,
                                                   "lValueRequested": false,
                                                   "member_name": "mul",
-                                                  "referencedDeclaration": 2360,
+                                                  "referencedDeclaration": 2447,
                                                   "type": "function (uint256,uint256) pure returns (uint256)"
                                                 },
                                                 "children": [
@@ -7542,7 +7542,7 @@
                                                       "overloadedDeclarations": [
                                                         null
                                                       ],
-                                                      "referencedDeclaration": 2423,
+                                                      "referencedDeclaration": 2510,
                                                       "type": "type(library SafeMath)",
                                                       "value": "SafeMath"
                                                     },
@@ -7808,7 +7808,7 @@
                                   "overloadedDeclarations": [
                                     null
                                   ],
-                                  "referencedDeclaration": 2450,
+                                  "referencedDeclaration": 2537,
                                   "type": "contract CelebrityToken",
                                   "value": "this"
                                 },
@@ -8192,7 +8192,7 @@
                                       "overloadedDeclarations": [
                                         null
                                       ],
-                                      "referencedDeclaration": 2435,
+                                      "referencedDeclaration": 2522,
                                       "type": "msg",
                                       "value": "msg"
                                     },
@@ -8504,7 +8504,7 @@
                               "overloadedDeclarations": [
                                 null
                               ],
-                              "referencedDeclaration": 2438,
+                              "referencedDeclaration": 2525,
                               "type": "function (bool) pure",
                               "value": "require"
                             },
@@ -8786,7 +8786,7 @@
                               "overloadedDeclarations": [
                                 null
                               ],
-                              "referencedDeclaration": 2438,
+                              "referencedDeclaration": 2525,
                               "type": "function (bool) pure",
                               "value": "require"
                             },
@@ -9164,7 +9164,7 @@
                               "overloadedDeclarations": [
                                 null
                               ],
-                              "referencedDeclaration": 2435,
+                              "referencedDeclaration": 2522,
                               "type": "msg",
                               "value": "msg"
                             },
@@ -9291,7 +9291,7 @@
                               "overloadedDeclarations": [
                                 null
                               ],
-                              "referencedDeclaration": 2438,
+                              "referencedDeclaration": 2525,
                               "type": "function (bool) pure",
                               "value": "require"
                             },
@@ -9390,7 +9390,7 @@
                               "overloadedDeclarations": [
                                 null
                               ],
-                              "referencedDeclaration": 2438,
+                              "referencedDeclaration": 2525,
                               "type": "function (bool) pure",
                               "value": "require"
                             },
@@ -10853,7 +10853,7 @@
                               "overloadedDeclarations": [
                                 null
                               ],
-                              "referencedDeclaration": 2438,
+                              "referencedDeclaration": 2525,
                               "type": "function (bool) pure",
                               "value": "require"
                             },
@@ -10917,7 +10917,7 @@
                                       "overloadedDeclarations": [
                                         null
                                       ],
-                                      "referencedDeclaration": 2435,
+                                      "referencedDeclaration": 2522,
                                       "type": "msg",
                                       "value": "msg"
                                     },
@@ -10987,7 +10987,7 @@
                               "overloadedDeclarations": [
                                 null
                               ],
-                              "referencedDeclaration": 2438,
+                              "referencedDeclaration": 2525,
                               "type": "function (bool) pure",
                               "value": "require"
                             },
@@ -11120,7 +11120,7 @@
                                   "overloadedDeclarations": [
                                     null
                                   ],
-                                  "referencedDeclaration": 2435,
+                                  "referencedDeclaration": 2522,
                                   "type": "msg",
                                   "value": "msg"
                                 },
@@ -11323,7 +11323,7 @@
                               "overloadedDeclarations": [
                                 null
                               ],
-                              "referencedDeclaration": 2438,
+                              "referencedDeclaration": 2525,
                               "type": "function (bool) pure",
                               "value": "require"
                             },
@@ -11440,7 +11440,7 @@
                               "overloadedDeclarations": [
                                 null
                               ],
-                              "referencedDeclaration": 2438,
+                              "referencedDeclaration": 2525,
                               "type": "function (bool) pure",
                               "value": "require"
                             },
@@ -11557,7 +11557,7 @@
                               "overloadedDeclarations": [
                                 null
                               ],
-                              "referencedDeclaration": 2438,
+                              "referencedDeclaration": 2525,
                               "type": "function (bool) pure",
                               "value": "require"
                             },
@@ -12510,7 +12510,7 @@
                               "overloadedDeclarations": [
                                 null
                               ],
-                              "referencedDeclaration": 2438,
+                              "referencedDeclaration": 2525,
                               "type": "function (bool) pure",
                               "value": "require"
                             },
@@ -13412,7 +13412,7 @@
                                           "overloadedDeclarations": [
                                             null
                                           ],
-                                          "referencedDeclaration": 2450,
+                                          "referencedDeclaration": 2537,
                                           "type": "contract CelebrityToken",
                                           "value": "this"
                                         },
@@ -13513,7 +13513,7 @@
                                           "overloadedDeclarations": [
                                             null
                                           ],
-                                          "referencedDeclaration": 2450,
+                                          "referencedDeclaration": 2537,
                                           "type": "contract CelebrityToken",
                                           "value": "this"
                                         },
@@ -14180,5 +14180,5 @@
   },
   "networks": {},
   "schemaVersion": "1.0.1",
-  "updatedAt": "2018-02-06T12:15:56.156Z"
+  "updatedAt": "2018-02-06T15:10:23.978Z"
 }
