@@ -15,3 +15,7 @@ ganache-cli -a 20 -p 7545
 ```
 npm test
 ```
+
+Check out the following files for key functionality / tests:
+- contracts/GroupBuyContract.sol
+- test/GroupBuyContract.js
