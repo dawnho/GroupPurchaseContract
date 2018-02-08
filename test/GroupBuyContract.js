@@ -14,7 +14,7 @@ contract('GroupBuyContract#setup', accounts => {
   it("should set contract up with proper attributes", async () => {
     let groupBuy = await GroupBuyContract.deployed();
     const ceo = await groupBuy.ceoAddress.call();
-    const coo = await groupBuy.cooAddress.call();
+    const coo = await groupBuy.cooAddress1.call();
     const cfo = await groupBuy.cfoAddress.call();
     const address = await groupBuy.linkedContract.call();
     assert.equal(ceo, accounts[0], "CEO was set incorrectly");
@@ -51,16 +51,16 @@ contract("GroupBuyContract", accounts => {
           value: contribution
         }).then(tx => {
           expect(tx.receipt.status).to.equal('0x01', 'transaction should succeed');
-          return groupBuy.getContributionBalanceForTokenGroup(tokenId, {from: account_one});
+          return groupBuy.getSelfContributionBalanceForTokenGroup(tokenId, {from: account_one});
         }).then(balance => {
           groupContribBalance = balance.toNumber();
           return groupBuy.getTokenGroupTotalBalance(tokenId, {from: account_one});
         }).then(balance => {
           groupTotalBalance = balance.toNumber();
-          return groupBuy.getContributorsInTokenGroupCount(tokenId, {from: account_one});
-        }).then(count => {
-          groupContribCount = count.toNumber();
-          return groupBuy.getGroupsContributedTo({from: account_one});
+          return groupBuy.getContributorsInTokenGroup(tokenId, {from: account_two});
+        }).then(arr => {
+          groupContribCount = arr.length;
+          return groupBuy.getGroupsContributedTo(account_one, {from: account_two});
         }).then(arr => {
           contribGroupArr = arr;
           return groupBuy.getWithdrawableBalance({from: account_one});
@@ -90,7 +90,7 @@ contract("GroupBuyContract", accounts => {
             value: okContribution
           });
         }).then(() => {
-          return groupBuy.getContributionBalanceForTokenGroup(tokenId, {from: account_two});
+          return groupBuy.getSelfContributionBalanceForTokenGroup(tokenId, {from: account_two});
         }).then(balance => {
           assert.equal(balance.toNumber(), okContribution);
         });
@@ -118,7 +118,7 @@ contract("GroupBuyContract", accounts => {
           value: contributionNeeded + excessBalance
         }).then(tx => {
           expect(tx.receipt.status).to.equal('0x01', 'transaction should succeed');
-          return groupBuy.getContributionBalanceForTokenGroup(tokenId, {from: account_three});
+          return groupBuy.getSelfContributionBalanceForTokenGroup(tokenId, {from: account_three});
         }).then(balance => {
           assert.equal(balance.toNumber(), contributionNeeded);
           return groupBuy.getGroupPurchasedPrice(tokenId, {from: account_three});
@@ -175,19 +175,19 @@ contract("GroupBuyContract", accounts => {
           return groupBuy.getWithdrawableBalance({from: account_three});
         }).then(balance => {
           assert.equal(contribution, balance);
-          return groupBuy.getGroupsContributedTo({from: account_three});
+          return groupBuy.getSelfGroupsContributedTo({from: account_three});
         }).then(arr => {
           assert.equal(arr[0].toNumber(), 1);
           assert.equal(arr.length, 1);
-          return groupBuy.getContributionBalanceForTokenGroup(tokenId, {from: account_three});
+          return groupBuy.getContributionBalanceForTokenGroup(tokenId, account_three, {from: account_two});
         }).then(balance => {
           assert.equal(balance.toNumber(), 0);
-          return groupBuy.getContributionBalanceForTokenGroup(tokenId, {from: account_two});
+          return groupBuy.getContributionBalanceForTokenGroup(tokenId, account_two, {from: account_one});
         }).then(balance => {
           assert.equal(balance.toNumber(), contribution);
-          return groupBuy.getContributorsInTokenGroupCount(tokenId, {from: account_three});
-        }).then(count => {
-          assert.equal(count, 1);
+          return groupBuy.getContributorsInTokenGroup(tokenId, {from: account_three});
+        }).then(arr => {
+          assert.equal(arr.length, 1);
           return groupBuy.getTokenGroupTotalBalance(tokenId, {from: account_three});
         }).then(balance => {
           assert.equal(balance.toNumber(), contribution);
@@ -284,11 +284,11 @@ contract("GroupBuyContract", accounts => {
           let groups_two = await groupBuy.getGroupsContributedTo({from: account_two});
           let groups_three = await groupBuy.getGroupsContributedTo({from: account_three});
 
-          let contrib_one = await groupBuy.getContributionBalanceForTokenGroup(tokenId, {from: account_one});
-          let contrib_two = await groupBuy.getContributionBalanceForTokenGroup(tokenId, {from: account_two});
-          let contrib_three = await groupBuy.getContributionBalanceForTokenGroup(tokenId, {from: account_three});
+          let contrib_one = await groupBuy.getSelfContributionBalanceForTokenGroup(tokenId, {from: account_one});
+          let contrib_two = await groupBuy.getSelfContributionBalanceForTokenGroup(tokenId, {from: account_two});
+          let contrib_three = await groupBuy.getSelfContributionBalanceForTokenGroup(tokenId, {from: account_three});
 
-          let contrib_count = await groupBuy.getContributorsInTokenGroupCount(tokenId, {from: account_three});
+          let contrib_arr = await groupBuy.getSelfContributorsInTokenGroup(tokenId, {from: account_three});
           let contrib_balance = await groupBuy.getTokenGroupTotalBalance(tokenId, {from: account_three});
 
           expect(_.some(groups_one, findToken)).to.be.false;
@@ -299,7 +299,7 @@ contract("GroupBuyContract", accounts => {
           expect(contrib_two.toNumber()).to.equal(0);
           expect(contrib_three.toNumber()).to.equal(0);
 
-          expect(contrib_count.toNumber()).to.equal(0);
+          expect(contrib_arr.length).to.equal(0);
           expect(contrib_balance.toNumber()).to.equal(0);
         });
       });

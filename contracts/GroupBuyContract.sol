@@ -42,11 +42,17 @@ contract GroupBuyContract {
   }
 
   /*** EVENTS ***/
+  /// Admin Events
   // @notice Event noting commission paid to contract
   event Commission(uint256 _tokenId, uint256 amount);
 
+  /// Contract Events
   // @notice Event signifiying that contract received funds via fallback fn
   event FundsReceived(address _from, uint256 amount);
+
+  /// User Events
+  // @notice Event marking a withdrawal of amount by user _to
+  event FundsDeposited(address _to, uint256 amount);
 
   // @notice Event noting a fund distribution for user _to from sale of token _tokenId
   event FundsRedistributed(uint256 _tokenId, address _to, uint256 amount);
@@ -77,10 +83,14 @@ contract GroupBuyContract {
   // The addresses of the accounts (or contracts) that can execute actions within each roles.
   address public ceoAddress;
   address public cfoAddress;
-  address public cooAddress;
+  address public cooAddress1;
+  address public cooAddress2;
+  address public cooAddress3;
 
   uint256 public activeGroups;
   uint256 public commissionBalance;
+  uint256 private distributionNumerator;
+  uint256 private distributionDenominator;
 
   CelebrityToken public linkedContract;
 
@@ -105,7 +115,11 @@ contract GroupBuyContract {
 
   /// @dev Access modifier for COO-only functionality
   modifier onlyCOO() {
-    require(msg.sender == cooAddress);
+    require(
+      msg.sender == cooAddress1 ||
+      msg.sender == cooAddress2 ||
+      msg.sender == cooAddress3
+    );
     _;
   }
 
@@ -113,17 +127,23 @@ contract GroupBuyContract {
   modifier onlyCLevel() {
     require(
       msg.sender == ceoAddress ||
-      msg.sender == cooAddress ||
+      msg.sender == cooAddress1 ||
+      msg.sender == cooAddress2 ||
+      msg.sender == cooAddress3 ||
       msg.sender == cfoAddress
     );
     _;
   }
 
   /*** CONSTRUCTOR ***/
-  function GroupBuyContract(address contractAddress) public {
+  function GroupBuyContract(address contractAddress, uint256 numerator, uint256 denominator) public {
     ceoAddress = msg.sender;
-    cooAddress = msg.sender;
+    cooAddress1 = msg.sender;
+    cooAddress2 = msg.sender;
+    cooAddress3 = msg.sender;
     cfoAddress = msg.sender;
+    distributionNumerator = numerator;
+    distributionDenominator = denominator;
     linkedContract = CelebrityToken(contractAddress);
   }
 
@@ -136,10 +156,26 @@ contract GroupBuyContract {
   /** Information Query Fns **/
   /// @notice Get contributed balance in _tokenId token group for user
   /// @param _tokenId The ID of the token to be queried
-  function getContributionBalanceForTokenGroup(uint256 _tokenId) public view returns (uint balance) {
+  function getContributionBalanceForTokenGroup(uint256 _tokenId, address userAdd) public view returns (uint balance) {
+    var group = tokenIndexToGroup[_tokenId];
+    require(group.exists);
+    balance = group.addressToContribution[userAdd];
+  }
+
+  /// @notice Get contributed balance in _tokenId token group for user
+  /// @param _tokenId The ID of the token to be queried
+  function getSelfContributionBalanceForTokenGroup(uint256 _tokenId) public view returns (uint balance) {
     var group = tokenIndexToGroup[_tokenId];
     require(group.exists);
     balance = group.addressToContribution[msg.sender];
+  }
+
+  /// @notice Get array of contributors' addresses in _tokenId token group
+  /// @param _tokenId The ID of the token to be queried
+  function getContributorsInTokenGroup(uint256 _tokenId) public view returns (address[] contribAddr) {
+    var group = tokenIndexToGroup[_tokenId];
+    require(group.exists);
+    contribAddr = group.contributorArr;
   }
 
   /// @notice Get no. of contributors in _tokenId token group
@@ -150,8 +186,19 @@ contract GroupBuyContract {
     count = group.contributorArr.length;
   }
 
+  /// @notice Get list of tokenIds of token groups a user contributed to
+  function getGroupsContributedTo(address userAdd) public view returns (uint256[] groupIds) {
+    // Safety check to prevent against an unexpected 0x0 default.
+    require(_addressNotNull(userAdd));
+
+    var contributor = userAddressToContributor[userAdd];
+    require(contributor.exists);
+
+    groupIds = contributor.groupArr;
+  }
+
   /// @notice Get list of tokenIds of token groups the user contributed to
-  function getGroupsContributedTo() public view returns (uint256[] groupIds) {
+  function getSelfGroupsContributedTo() public view returns (uint256[] groupIds) {
     // Safety check to prevent against an unexpected 0x0 default.
     require(_addressNotNull(msg.sender));
 
@@ -196,7 +243,9 @@ contract GroupBuyContract {
     var group = tokenIndexToGroup[_tokenId];
     require(group.addressToContribution[msg.sender] > 0 ||
             msg.sender == ceoAddress ||
-            msg.sender == cooAddress ||
+            msg.sender == cooAddress1 ||
+            msg.sender == cooAddress2 ||
+            msg.sender == cooAddress3 ||
             msg.sender == cfoAddress);
 
     // Safety check that enough money has been contributed to group
@@ -252,6 +301,7 @@ contract GroupBuyContract {
       tokenIndexToGroup[_tokenId].contributedBalance += amountNeeded;
       // refund excess paid
       userAddressToContributor[userAdd].withdrawableBalance += SafeMath.sub(msg.value, amountNeeded);
+      FundsDeposited(userAdd, SafeMath.sub(msg.value, amountNeeded));
     } else {
       tokenIndexToGroup[_tokenId].addressToContribution[userAdd] = msg.value;
       tokenIndexToGroup[_tokenId].contributedBalance += msg.value;
@@ -262,17 +312,17 @@ contract GroupBuyContract {
     uint256 gIndex = userAddressToContributor[userAdd].groupArr.push(_tokenId);
     userAddressToContributor[userAdd].tokenIdToGroupArrIndex[_tokenId] = gIndex;
 
+    // Purchase token if enough funds contributed
+    if (tokenIndexToGroup[_tokenId].contributedBalance >= tokenPrice) {
+      _purchase(_tokenId, tokenPrice);
+    }
+
     JoinGroup(
       _tokenId,
       userAdd,
       tokenIndexToGroup[_tokenId].contributedBalance,
       tokenIndexToGroup[_tokenId].addressToContribution[userAdd]
     );
-
-    // Purchase token if enough funds contributed
-    if (tokenIndexToGroup[_tokenId].contributedBalance >= tokenPrice) {
-      _purchase(_tokenId, tokenPrice);
-    }
   }
 
   /// @notice Allow user to leave purchase group; note that their contribution
@@ -298,28 +348,48 @@ contract GroupBuyContract {
     require(group.addressToContributorArrIndex[userAdd] > 0);
     require(contributor.tokenIdToGroupArrIndex[_tokenId] > 0);
 
-    // Index was saved is 1 + the array's index, b/c 0 is the default value
-    //  in a mapping.
-    uint cIndex = group.addressToContributorArrIndex[userAdd] - 1;
-    uint lastCIndex = group.contributorArr.length - 1;
-    uint refundBalance = group.addressToContribution[userAdd];
-
-    // clear contribution record in group
-    tokenIndexToGroup[_tokenId].addressToContributorArrIndex[userAdd] = 0;
-    tokenIndexToGroup[_tokenId].addressToContribution[userAdd] = 0;
-
-    // move address in last position to deleted contributor's spot
-    if (lastCIndex > 0) {
-      tokenIndexToGroup[_tokenId].addressToContributorArrIndex[group.contributorArr[lastCIndex]] = cIndex;
-      tokenIndexToGroup[_tokenId].contributorArr[cIndex] = group.contributorArr[lastCIndex];
-    }
-
-    tokenIndexToGroup[_tokenId].contributorArr.length -= 1;
-    tokenIndexToGroup[_tokenId].contributedBalance -= refundBalance;
-
+    uint refundBalance = _clearContributorRecordInGroup(_tokenId, userAdd);
     _clearGroupRecordInContributor(_tokenId, userAdd);
 
     userAddressToContributor[userAdd].withdrawableBalance += refundBalance;
+    FundsDeposited(userAdd, refundBalance);
+
+    LeaveGroup(
+      _tokenId,
+      userAdd,
+      tokenIndexToGroup[_tokenId].contributedBalance,
+      refundBalance
+    );
+  }
+
+  /// @notice Allow user to leave purchase group; note that their contribution
+  ///  and any funds they have in their withdrawableBalance will transfered to them.
+  /// @param _tokenId The ID of the Token purchase group to be left
+  function leaveTokenGroupAndWithdrawBalance(uint256 _tokenId) public {
+    address userAdd = msg.sender;
+
+    var group = tokenIndexToGroup[_tokenId];
+    var contributor = userAddressToContributor[userAdd];
+
+    // Safety check to prevent against an unexpected 0x0 default.
+    require(_addressNotNull(userAdd));
+
+    // Safety check to make sure group exists;
+    require(group.exists);
+
+    // Safety check to make sure group hasn't purchased token already
+    require(group.purchasePrice == 0);
+
+    // Safety checks to ensure contributor has contributed to group
+    require(group.addressToContributorArrIndex[userAdd] > 0);
+    require(contributor.tokenIdToGroupArrIndex[_tokenId] > 0);
+
+    uint refundBalance = _clearContributorRecordInGroup(_tokenId, userAdd);
+    _clearGroupRecordInContributor(_tokenId, userAdd);
+
+    userAddressToContributor[userAdd].withdrawableBalance += refundBalance;
+    FundsDeposited(userAdd, refundBalance);
+    _withdrawUserFunds(userAdd);
 
     LeaveGroup(
       _tokenId,
@@ -332,19 +402,21 @@ contract GroupBuyContract {
   /// @dev Withdraw balance from own account
   function withdrawBalance() public {
     require(_addressNotNull(msg.sender));
-    var contributor = userAddressToContributor[msg.sender];
-    require(contributor.exists);
+    require(userAddressToContributor[msg.sender].exists);
 
-    uint256 balance = contributor.withdrawableBalance;
-    contributor.withdrawableBalance = 0;
-
-    if (balance > 0) {
-      msg.sender.transfer(balance);
-      FundsWithdrawn(msg.sender, balance);
-    }
+    _withdrawUserFunds(msg.sender);
   }
 
   /** Admin Fns **/
+  /// @notice Fn for adjusting commission rate
+  /// @param numerator Numerator for calculating funds distributed
+  /// @param denominator Denominator for calculating funds distributed
+  function adjustCommission(uint256 numerator, uint256 denominator) public onlyCFO {
+    require(numerator <= denominator);
+    distributionNumerator = numerator;
+    distributionDenominator = denominator;
+  }
+
   /// @notice Backup fn to allow redistribution of funds after sale,
   ///  for the special scenario where an alternate sale platform is used
   /// @param _tokenId The ID of the Token purchase group
@@ -393,12 +465,28 @@ contract GroupBuyContract {
     cfoAddress = _newCFO;
   }
 
-  /// @dev Assigns a new address to act as the COO. Only available to the current CEO.
-  /// @param _newCOO The address of the new COO
-  function setCOO(address _newCOO) public onlyCEO {
-    require(_newCOO != address(0));
+  /// @dev Assigns a new address to act as the COO1. Only available to the current CEO.
+  /// @param _newCOO1 The address of the new COO1
+  function setCOO1(address _newCOO1) public onlyCEO {
+    require(_newCOO1 != address(0));
 
-    cooAddress = _newCOO;
+    cooAddress1 = _newCOO1;
+  }
+
+  /// @dev Assigns a new address to act as the COO2. Only available to the current CEO.
+  /// @param _newCOO2 The address of the new COO2
+  function setCOO2(address _newCOO2) public onlyCEO {
+    require(_newCOO2 != address(0));
+
+    cooAddress2 = _newCOO2;
+  }
+
+  /// @dev Assigns a new address to act as the COO3. Only available to the current CEO.
+  /// @param _newCOO3 The address of the new COO3
+  function setCOO3(address _newCOO3) public onlyCEO {
+    require(_newCOO3 != address(0));
+
+    cooAddress3 = _newCOO3;
   }
 
   /// @notice Backup fn to allow transfer of token out of
@@ -433,6 +521,32 @@ contract GroupBuyContract {
   /// @param _to Address to be checked
   function _addressNotNull(address _to) private pure returns (bool) {
     return _to != address(0);
+  }
+
+  /// @dev Clears record of a Contributor from a Group's record
+  /// @param _tokenId Token ID of Group to be cleared
+  /// @param _userAdd Address of Contributor
+  function _clearContributorRecordInGroup(uint256 _tokenId, address _userAdd) private returns (uint256 refundBalance) {
+    var group = tokenIndexToGroup[_tokenId];
+
+    // Index was saved is 1 + the array's index, b/c 0 is the default value
+    //  in a mapping.
+    uint cIndex = group.addressToContributorArrIndex[_userAdd] - 1;
+    uint lastCIndex = group.contributorArr.length - 1;
+    refundBalance = group.addressToContribution[_userAdd];
+
+    // clear contribution record in group
+    tokenIndexToGroup[_tokenId].addressToContributorArrIndex[_userAdd] = 0;
+    tokenIndexToGroup[_tokenId].addressToContribution[_userAdd] = 0;
+
+    // move address in last position to deleted contributor's spot
+    if (lastCIndex > 0) {
+      tokenIndexToGroup[_tokenId].addressToContributorArrIndex[group.contributorArr[lastCIndex]] = cIndex;
+      tokenIndexToGroup[_tokenId].contributorArr[cIndex] = group.contributorArr[lastCIndex];
+    }
+
+    tokenIndexToGroup[_tokenId].contributorArr.length -= 1;
+    tokenIndexToGroup[_tokenId].contributedBalance -= refundBalance;
   }
 
   /// @dev Clears record of a Group from a Contributor's record
@@ -484,7 +598,8 @@ contract GroupBuyContract {
   /// @param _tokenId Token ID of token to be purchased
   /// @param _amount Amount paid into contract for token
   function _redistributeProceeds(uint256 _tokenId, uint256 _amount) private {
-    uint256 fundsForDistribution = uint256(SafeMath.div(SafeMath.mul(_amount, 97), 100));
+    uint256 fundsForDistribution = uint256(SafeMath.div(SafeMath.mul(_amount,
+      distributionNumerator), distributionDenominator));
     uint256 commission = _amount;
 
     for (uint i = 0; i < tokenIndexToGroup[_tokenId].contributorArr.length; i++) {
@@ -495,6 +610,7 @@ contract GroupBuyContract {
         tokenIndexToGroup[_tokenId].addressToContribution[userAdd]),
         tokenIndexToGroup[_tokenId].contributedBalance));
       userAddressToContributor[userAdd].withdrawableBalance += userProceeds;
+      FundsDeposited(userAdd, userProceeds);
 
       _clearGroupRecordInContributor(_tokenId, userAdd);
 
@@ -512,5 +628,15 @@ contract GroupBuyContract {
     tokenIndexToGroup[_tokenId].contributorArr.length = 0;
     tokenIndexToGroup[_tokenId].contributedBalance = 0;
     tokenIndexToGroup[_tokenId].purchasePrice = 0;
+  }
+
+  function _withdrawUserFunds(address userAdd) private {
+    uint256 balance = userAddressToContributor[userAdd].withdrawableBalance;
+    userAddressToContributor[userAdd].withdrawableBalance = 0;
+
+    if (balance > 0) {
+      userAdd.transfer(balance);
+      FundsWithdrawn(userAdd, balance);
+    }
   }
 }

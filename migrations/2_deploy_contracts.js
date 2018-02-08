@@ -4,7 +4,7 @@ var GroupBuyContract = artifacts.require("GroupBuyContract");
 module.exports = function(deployer, network) {
   if (network === "development") {
     deployer.deploy(CelebrityToken).then(() => {
-      return deployer.deploy(GroupBuyContract, CelebrityToken.address);
+      return deployer.deploy(GroupBuyContract, CelebrityToken.address, 97, 100);
     });
   } else {
 
