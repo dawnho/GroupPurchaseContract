@@ -43,24 +43,24 @@ contract GroupBuyContract {
 
   /*** EVENTS ***/
   /// Admin Events
-  // @notice Event noting commission paid to contract
+  // @dev Event noting commission paid to contract
   event Commission(uint256 _tokenId, uint256 amount);
 
   /// Contract Events
-  // @notice Event signifiying that contract received funds via fallback fn
+  // @dev Event signifiying that contract received funds via fallback fn
   event FundsReceived(address _from, uint256 amount);
 
   /// User Events
-  // @notice Event marking a withdrawal of amount by user _to
+  // @dev Event marking a withdrawal of amount by user _to
   event FundsDeposited(address _to, uint256 amount);
 
-  // @notice Event noting a fund distribution for user _to from sale of token _tokenId
+  // @dev Event noting a fund distribution for user _to from sale of token _tokenId
   event FundsRedistributed(uint256 _tokenId, address _to, uint256 amount);
 
-  // @notice Event marking a withdrawal of amount by user _to
+  // @dev Event marking a withdrawal of amount by user _to
   event FundsWithdrawn(address _to, uint256 amount);
 
-  // @notice Event for when a contributor joins a token group _tokenId
+  // @dev Event for when a contributor joins a token group _tokenId
   event JoinGroup(
     uint256 _tokenId,
     address contributor,
@@ -68,7 +68,7 @@ contract GroupBuyContract {
     uint256 contributionAdded
   );
 
-  // @notice Event for when a contributor leaves a token group
+  // @dev Event for when a contributor leaves a token group
   event LeaveGroup(
     uint256 _tokenId,
     address contributor,
@@ -76,7 +76,7 @@ contract GroupBuyContract {
     uint256 contributionSubtracted
   );
 
-  // @notice Event for when a token group purchases a token
+  // @dev Event for when a token group purchases a token
   event TokenPurchased(uint256 _tokenId, uint256 balance);
 
   /*** STORAGE ***/
@@ -465,7 +465,7 @@ contract GroupBuyContract {
   }
 
   /** Information Query Fns **/
-  /// @notice Get contributed balance in _tokenId token group for user
+  /// @dev Get contributed balance in _tokenId token group for user
   /// @param _tokenId The ID of the token to be queried
   function getContributionBalanceForTokenGroup(uint256 _tokenId, address userAdd) external view returns (uint balance) {
     var group = tokenIndexToGroup[_tokenId];
@@ -473,7 +473,7 @@ contract GroupBuyContract {
     balance = group.addressToContribution[userAdd];
   }
 
-  /// @notice Get contributed balance in _tokenId token group for user
+  /// @dev Get contributed balance in _tokenId token group for user
   /// @param _tokenId The ID of the token to be queried
   function getSelfContributionBalanceForTokenGroup(uint256 _tokenId) external view returns (uint balance) {
     var group = tokenIndexToGroup[_tokenId];
@@ -481,7 +481,7 @@ contract GroupBuyContract {
     balance = group.addressToContribution[msg.sender];
   }
 
-  /// @notice Get array of contributors' addresses in _tokenId token group
+  /// @dev Get array of contributors' addresses in _tokenId token group
   /// @param _tokenId The ID of the token to be queried
   function getContributorsInTokenGroup(uint256 _tokenId) external view returns (address[] contribAddr) {
     var group = tokenIndexToGroup[_tokenId];
@@ -489,7 +489,7 @@ contract GroupBuyContract {
     contribAddr = group.contributorArr;
   }
 
-  /// @notice Get no. of contributors in _tokenId token group
+  /// @dev Get no. of contributors in _tokenId token group
   /// @param _tokenId The ID of the token to be queried
   function getContributorsInTokenGroupCount(uint256 _tokenId) external view returns (uint count) {
     var group = tokenIndexToGroup[_tokenId];
@@ -497,7 +497,7 @@ contract GroupBuyContract {
     count = group.contributorArr.length;
   }
 
-  /// @notice Get list of tokenIds of token groups a user contributed to
+  /// @dev Get list of tokenIds of token groups a user contributed to
   function getGroupsContributedTo(address userAdd) external view returns (uint256[] groupIds) {
     // Safety check to prevent against an unexpected 0x0 default.
     require(_addressNotNull(userAdd));
@@ -508,7 +508,7 @@ contract GroupBuyContract {
     groupIds = contributor.groupArr;
   }
 
-  /// @notice Get list of tokenIds of token groups the user contributed to
+  /// @dev Get list of tokenIds of token groups the user contributed to
   function getSelfGroupsContributedTo() external view returns (uint256[] groupIds) {
     // Safety check to prevent against an unexpected 0x0 default.
     require(_addressNotNull(msg.sender));
@@ -519,7 +519,7 @@ contract GroupBuyContract {
     groupIds = contributor.groupArr;
   }
 
-  /// @notice Get price at which token group purchased _tokenId token
+  /// @dev Get price at which token group purchased _tokenId token
   function getGroupPurchasedPrice(uint256 _tokenId) external view returns (uint256 price) {
     var group = tokenIndexToGroup[_tokenId];
     require(group.exists);
@@ -527,7 +527,7 @@ contract GroupBuyContract {
     price = group.purchasePrice;
   }
 
-  /// @notice Get withdrawable balance from sale proceeds for a user
+  /// @dev Get withdrawable balance from sale proceeds for a user
   function getWithdrawableBalance() external view returns (uint256 balance) {
     // Safety check to prevent against an unexpected 0x0 default.
     require(_addressNotNull(msg.sender));
@@ -538,7 +538,7 @@ contract GroupBuyContract {
     balance = contributor.withdrawableBalance;
   }
 
-  /// @notice Get total contributed balance in _tokenId token group
+  /// @dev Get total contributed balance in _tokenId token group
   /// @param _tokenId The ID of the token group to be queried
   function getTokenGroupTotalBalance(uint256 _tokenId) external view returns (uint balance) {
     var group = tokenIndexToGroup[_tokenId];
