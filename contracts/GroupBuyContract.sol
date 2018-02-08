@@ -87,6 +87,9 @@ contract GroupBuyContract {
   address public cooAddress2;
   address public cooAddress3;
 
+  // @dev Keeps track whether the contract is paused. When that is true, most actions are blocked
+  bool public paused = false;
+
   uint256 public activeGroups;
   uint256 public commissionBalance;
   uint256 private distributionNumerator;
@@ -135,6 +138,18 @@ contract GroupBuyContract {
     _;
   }
 
+  /// @dev Modifier to allow actions only when the contract IS NOT paused
+  modifier whenNotPaused() {
+    require(!paused);
+    _;
+  }
+
+  /// @dev Modifier to allow actions only when the contract IS paused
+  modifier whenPaused {
+    require(paused);
+    _;
+  }
+
   /*** CONSTRUCTOR ***/
   function GroupBuyContract(address contractAddress, uint256 numerator, uint256 denominator) public {
     ceoAddress = msg.sender;
@@ -149,97 +164,16 @@ contract GroupBuyContract {
 
   /*** PUBLIC FUNCTIONS ***/
   /// @notice Fallback fn for receiving ether
-  function () public payable {
+  function() external payable {
+    require(msg.sender == address(linkedContract));
     FundsReceived(msg.sender, msg.value);
-  }
-
-  /** Information Query Fns **/
-  /// @notice Get contributed balance in _tokenId token group for user
-  /// @param _tokenId The ID of the token to be queried
-  function getContributionBalanceForTokenGroup(uint256 _tokenId, address userAdd) public view returns (uint balance) {
-    var group = tokenIndexToGroup[_tokenId];
-    require(group.exists);
-    balance = group.addressToContribution[userAdd];
-  }
-
-  /// @notice Get contributed balance in _tokenId token group for user
-  /// @param _tokenId The ID of the token to be queried
-  function getSelfContributionBalanceForTokenGroup(uint256 _tokenId) public view returns (uint balance) {
-    var group = tokenIndexToGroup[_tokenId];
-    require(group.exists);
-    balance = group.addressToContribution[msg.sender];
-  }
-
-  /// @notice Get array of contributors' addresses in _tokenId token group
-  /// @param _tokenId The ID of the token to be queried
-  function getContributorsInTokenGroup(uint256 _tokenId) public view returns (address[] contribAddr) {
-    var group = tokenIndexToGroup[_tokenId];
-    require(group.exists);
-    contribAddr = group.contributorArr;
-  }
-
-  /// @notice Get no. of contributors in _tokenId token group
-  /// @param _tokenId The ID of the token to be queried
-  function getContributorsInTokenGroupCount(uint256 _tokenId) public view returns (uint count) {
-    var group = tokenIndexToGroup[_tokenId];
-    require(group.exists);
-    count = group.contributorArr.length;
-  }
-
-  /// @notice Get list of tokenIds of token groups a user contributed to
-  function getGroupsContributedTo(address userAdd) public view returns (uint256[] groupIds) {
-    // Safety check to prevent against an unexpected 0x0 default.
-    require(_addressNotNull(userAdd));
-
-    var contributor = userAddressToContributor[userAdd];
-    require(contributor.exists);
-
-    groupIds = contributor.groupArr;
-  }
-
-  /// @notice Get list of tokenIds of token groups the user contributed to
-  function getSelfGroupsContributedTo() public view returns (uint256[] groupIds) {
-    // Safety check to prevent against an unexpected 0x0 default.
-    require(_addressNotNull(msg.sender));
-
-    var contributor = userAddressToContributor[msg.sender];
-    require(contributor.exists);
-
-    groupIds = contributor.groupArr;
-  }
-
-  /// @notice Get price at which token group purchased _tokenId token
-  function getGroupPurchasedPrice(uint256 _tokenId) public view returns (uint256 price) {
-    var group = tokenIndexToGroup[_tokenId];
-    require(group.exists);
-    require(group.purchasePrice > 0);
-    price = group.purchasePrice;
-  }
-
-  /// @notice Get withdrawable balance from sale proceeds for a user
-  function getWithdrawableBalance() public view returns (uint256 balance) {
-    // Safety check to prevent against an unexpected 0x0 default.
-    require(_addressNotNull(msg.sender));
-
-    var contributor = userAddressToContributor[msg.sender];
-    require(contributor.exists);
-
-    balance = contributor.withdrawableBalance;
-  }
-
-  /// @notice Get total contributed balance in _tokenId token group
-  /// @param _tokenId The ID of the token group to be queried
-  function getTokenGroupTotalBalance(uint256 _tokenId) public view returns (uint balance) {
-    var group = tokenIndexToGroup[_tokenId];
-    require(group.exists);
-    balance = group.contributedBalance;
   }
 
   /** Action Fns **/
   /// @notice Backup function for activating token purchase
   ///  requires sender to be a member of the group or CLevel
   /// @param _tokenId The ID of the Token group
-  function activatePurchase(uint256 _tokenId) public {
+  function activatePurchase(uint256 _tokenId) external whenNotPaused {
     var group = tokenIndexToGroup[_tokenId];
     require(group.addressToContribution[msg.sender] > 0 ||
             msg.sender == ceoAddress ||
@@ -260,7 +194,7 @@ contract GroupBuyContract {
 
   /// @notice Allow user to contribute to _tokenId token group
   /// @param _tokenId The ID of the token group to be joined
-  function contributeToTokenGroup(uint256 _tokenId) public payable {
+  function contributeToTokenGroup(uint256 _tokenId) external payable whenNotPaused {
     address userAdd = msg.sender;
     // Safety check to prevent against an unexpected 0x0 default.
     require(_addressNotNull(userAdd));
@@ -329,7 +263,7 @@ contract GroupBuyContract {
   ///  will be added to their withdrawable balance, and not directly refunded.
   ///  User can call withdrawBalance to retrieve funds.
   /// @param _tokenId The ID of the Token purchase group to be left
-  function leaveTokenGroup(uint256 _tokenId) public {
+  function leaveTokenGroup(uint256 _tokenId) external whenNotPaused {
     address userAdd = msg.sender;
 
     var group = tokenIndexToGroup[_tokenId];
@@ -365,7 +299,7 @@ contract GroupBuyContract {
   /// @notice Allow user to leave purchase group; note that their contribution
   ///  and any funds they have in their withdrawableBalance will transfered to them.
   /// @param _tokenId The ID of the Token purchase group to be left
-  function leaveTokenGroupAndWithdrawBalance(uint256 _tokenId) public {
+  function leaveTokenGroupAndWithdrawBalance(uint256 _tokenId) external whenNotPaused {
     address userAdd = msg.sender;
 
     var group = tokenIndexToGroup[_tokenId];
@@ -400,7 +334,7 @@ contract GroupBuyContract {
   }
 
   /// @dev Withdraw balance from own account
-  function withdrawBalance() public {
+  function withdrawBalance() external whenNotPaused {
     require(_addressNotNull(msg.sender));
     require(userAddressToContributor[msg.sender].exists);
 
@@ -411,17 +345,31 @@ contract GroupBuyContract {
   /// @notice Fn for adjusting commission rate
   /// @param numerator Numerator for calculating funds distributed
   /// @param denominator Denominator for calculating funds distributed
-  function adjustCommission(uint256 numerator, uint256 denominator) public onlyCFO {
+  function adjustCommission(uint256 numerator, uint256 denominator) external onlyCFO {
     require(numerator <= denominator);
     distributionNumerator = numerator;
     distributionDenominator = denominator;
   }
 
-  /// @notice Backup fn to allow redistribution of funds after sale,
+  /// @dev Called by any "C-level" role to pause the contract. Used only when
+  ///  a bug or exploit is detected and we need to limit damage.
+  function pause() external onlyCLevel whenNotPaused {
+    paused = true;
+  }
+
+  /// @dev Unpauses the smart contract. Can only be called by the CEO, since
+  ///  one reason we may pause the contract is when CFO or COO accounts are
+  ///  compromised.
+  function unpause() external onlyCEO whenPaused {
+    // can't unpause if contract was upgraded
+    paused = false;
+  }
+
+  /// @dev Backup fn to allow redistribution of funds after sale,
   ///  for the special scenario where an alternate sale platform is used
   /// @param _tokenId The ID of the Token purchase group
   /// @param _amount Funds to be redistributed
-  function redistributeCustomSaleProceeds(uint256 _tokenId, uint256 _amount) public onlyCOO {
+  function redistributeCustomSaleProceeds(uint256 _tokenId, uint256 _amount) external onlyCOO {
     var group = tokenIndexToGroup[_tokenId];
 
     // Safety check to make sure group exists and had purchased the token
@@ -431,9 +379,9 @@ contract GroupBuyContract {
     _redistributeProceeds(_tokenId, _amount);
   }
 
-  /// @notice Allow redistribution of funds after a sale
+  /// @dev Allow redistribution of funds after a sale
   /// @param _tokenId The ID of the Token purchase group
-  function redistributeSaleProceeds(uint256 _tokenId) public onlyCOO {
+  function redistributeSaleProceeds(uint256 _tokenId) external onlyCOO {
     var group = tokenIndexToGroup[_tokenId];
 
     // Safety check to make sure group exists and had purchased the token
@@ -451,7 +399,7 @@ contract GroupBuyContract {
 
   /// @dev Assigns a new address to act as the CEO. Only available to the current CEO.
   /// @param _newCEO The address of the new CEO
-  function setCEO(address _newCEO) public onlyCEO {
+  function setCEO(address _newCEO) external onlyCEO {
     require(_newCEO != address(0));
 
     ceoAddress = _newCEO;
@@ -459,7 +407,7 @@ contract GroupBuyContract {
 
   /// @dev Assigns a new address to act as the CFO. Only available to the current CEO.
   /// @param _newCFO The address of the new CFO
-  function setCFO(address _newCFO) public onlyCEO {
+  function setCFO(address _newCFO) external onlyCEO {
     require(_newCFO != address(0));
 
     cfoAddress = _newCFO;
@@ -467,7 +415,7 @@ contract GroupBuyContract {
 
   /// @dev Assigns a new address to act as the COO1. Only available to the current CEO.
   /// @param _newCOO1 The address of the new COO1
-  function setCOO1(address _newCOO1) public onlyCEO {
+  function setCOO1(address _newCOO1) external onlyCEO {
     require(_newCOO1 != address(0));
 
     cooAddress1 = _newCOO1;
@@ -475,7 +423,7 @@ contract GroupBuyContract {
 
   /// @dev Assigns a new address to act as the COO2. Only available to the current CEO.
   /// @param _newCOO2 The address of the new COO2
-  function setCOO2(address _newCOO2) public onlyCEO {
+  function setCOO2(address _newCOO2) external onlyCEO {
     require(_newCOO2 != address(0));
 
     cooAddress2 = _newCOO2;
@@ -483,18 +431,18 @@ contract GroupBuyContract {
 
   /// @dev Assigns a new address to act as the COO3. Only available to the current CEO.
   /// @param _newCOO3 The address of the new COO3
-  function setCOO3(address _newCOO3) public onlyCEO {
+  function setCOO3(address _newCOO3) external onlyCEO {
     require(_newCOO3 != address(0));
 
     cooAddress3 = _newCOO3;
   }
 
-  /// @notice Backup fn to allow transfer of token out of
+  /// @dev Backup fn to allow transfer of token out of
   ///  contract, for use where a purchase group wants to use an alternate
   ///  selling platform
   /// @param _tokenId The ID of the Token purchase group
   /// @param _to Address to transfer token to
-  function transferToken(uint256 _tokenId, address _to) public onlyCOO {
+  function transferToken(uint256 _tokenId, address _to) external onlyCOO {
     var group = tokenIndexToGroup[_tokenId];
 
     // Safety check to make sure group exists and had purchased the token
@@ -506,7 +454,7 @@ contract GroupBuyContract {
 
   /// @dev Withdraws sale commission, CFO-only functionality
   /// @param _to Address for commission to be sent to
-  function withdrawCommission(address _to) public onlyCFO {
+  function withdrawCommission(address _to) external onlyCFO {
     uint256 balance = commissionBalance;
     address transferee = (_to == address(0)) ? cfoAddress : _to;
     commissionBalance = 0;
@@ -514,6 +462,88 @@ contract GroupBuyContract {
       transferee.transfer(balance);
     }
     FundsWithdrawn(transferee, balance);
+  }
+
+  /** Information Query Fns **/
+  /// @notice Get contributed balance in _tokenId token group for user
+  /// @param _tokenId The ID of the token to be queried
+  function getContributionBalanceForTokenGroup(uint256 _tokenId, address userAdd) external view returns (uint balance) {
+    var group = tokenIndexToGroup[_tokenId];
+    require(group.exists);
+    balance = group.addressToContribution[userAdd];
+  }
+
+  /// @notice Get contributed balance in _tokenId token group for user
+  /// @param _tokenId The ID of the token to be queried
+  function getSelfContributionBalanceForTokenGroup(uint256 _tokenId) external view returns (uint balance) {
+    var group = tokenIndexToGroup[_tokenId];
+    require(group.exists);
+    balance = group.addressToContribution[msg.sender];
+  }
+
+  /// @notice Get array of contributors' addresses in _tokenId token group
+  /// @param _tokenId The ID of the token to be queried
+  function getContributorsInTokenGroup(uint256 _tokenId) external view returns (address[] contribAddr) {
+    var group = tokenIndexToGroup[_tokenId];
+    require(group.exists);
+    contribAddr = group.contributorArr;
+  }
+
+  /// @notice Get no. of contributors in _tokenId token group
+  /// @param _tokenId The ID of the token to be queried
+  function getContributorsInTokenGroupCount(uint256 _tokenId) external view returns (uint count) {
+    var group = tokenIndexToGroup[_tokenId];
+    require(group.exists);
+    count = group.contributorArr.length;
+  }
+
+  /// @notice Get list of tokenIds of token groups a user contributed to
+  function getGroupsContributedTo(address userAdd) external view returns (uint256[] groupIds) {
+    // Safety check to prevent against an unexpected 0x0 default.
+    require(_addressNotNull(userAdd));
+
+    var contributor = userAddressToContributor[userAdd];
+    require(contributor.exists);
+
+    groupIds = contributor.groupArr;
+  }
+
+  /// @notice Get list of tokenIds of token groups the user contributed to
+  function getSelfGroupsContributedTo() external view returns (uint256[] groupIds) {
+    // Safety check to prevent against an unexpected 0x0 default.
+    require(_addressNotNull(msg.sender));
+
+    var contributor = userAddressToContributor[msg.sender];
+    require(contributor.exists);
+
+    groupIds = contributor.groupArr;
+  }
+
+  /// @notice Get price at which token group purchased _tokenId token
+  function getGroupPurchasedPrice(uint256 _tokenId) external view returns (uint256 price) {
+    var group = tokenIndexToGroup[_tokenId];
+    require(group.exists);
+    require(group.purchasePrice > 0);
+    price = group.purchasePrice;
+  }
+
+  /// @notice Get withdrawable balance from sale proceeds for a user
+  function getWithdrawableBalance() external view returns (uint256 balance) {
+    // Safety check to prevent against an unexpected 0x0 default.
+    require(_addressNotNull(msg.sender));
+
+    var contributor = userAddressToContributor[msg.sender];
+    require(contributor.exists);
+
+    balance = contributor.withdrawableBalance;
+  }
+
+  /// @notice Get total contributed balance in _tokenId token group
+  /// @param _tokenId The ID of the token group to be queried
+  function getTokenGroupTotalBalance(uint256 _tokenId) external view returns (uint balance) {
+    var group = tokenIndexToGroup[_tokenId];
+    require(group.exists);
+    balance = group.contributedBalance;
   }
 
   /*** PRIVATE FUNCTIONS ***/
