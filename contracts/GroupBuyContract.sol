@@ -51,14 +51,15 @@ contract GroupBuyContract {
   event FundsReceived(address _from, uint256 amount);
 
   /// User Events
-  // @dev Event marking a withdrawal of amount by user _to
+  // @dev Event marking funds deposited into user _to's account
   event FundsDeposited(address _to, uint256 amount);
-
-  // @dev Event noting a fund distribution for user _to from sale of token _tokenId
-  event FundsRedistributed(uint256 _tokenId, address _to, uint256 amount);
 
   // @dev Event marking a withdrawal of amount by user _to
   event FundsWithdrawn(address _to, uint256 amount);
+
+  // @dev Event noting an interest distribution for user _to for token _tokenId.
+  //  Token Group will not be disbanded
+  event InterestDeposited(uint256 _tokenId, address _to, uint256 amount);
 
   // @dev Event for when a contributor joins a token group _tokenId
   event JoinGroup(
@@ -75,6 +76,9 @@ contract GroupBuyContract {
     uint256 groupBalance,
     uint256 contributionSubtracted
   );
+
+  // @dev Event noting sales proceeds distribution for user _to from sale of token _tokenId
+  event ProceedsDeposited(uint256 _tokenId, address _to, uint256 amount);
 
   // @dev Event for when a token group purchases a token
   event TokenPurchased(uint256 _tokenId, uint256 balance);
@@ -165,7 +169,6 @@ contract GroupBuyContract {
   /*** PUBLIC FUNCTIONS ***/
   /// @notice Fallback fn for receiving ether
   function() external payable {
-    require(msg.sender == address(linkedContract));
     FundsReceived(msg.sender, msg.value);
   }
 
@@ -216,7 +219,7 @@ contract GroupBuyContract {
     }
 
     // Safety check to make sure group isn't currently holding onto token
-    //  or has a group record stored (for redistribution)
+    //  or has a group record stored (for sales proceeds distribution)
     require(group.purchasePrice == 0);
 
     /// Safety check to ensure amount contributed is higher than min required percentage
@@ -246,17 +249,17 @@ contract GroupBuyContract {
     uint256 gIndex = userAddressToContributor[userAdd].groupArr.push(_tokenId);
     userAddressToContributor[userAdd].tokenIdToGroupArrIndex[_tokenId] = gIndex;
 
-    // Purchase token if enough funds contributed
-    if (tokenIndexToGroup[_tokenId].contributedBalance >= tokenPrice) {
-      _purchase(_tokenId, tokenPrice);
-    }
-
     JoinGroup(
       _tokenId,
       userAdd,
       tokenIndexToGroup[_tokenId].contributedBalance,
       tokenIndexToGroup[_tokenId].addressToContribution[userAdd]
     );
+
+    // Purchase token if enough funds contributed
+    if (tokenIndexToGroup[_tokenId].contributedBalance >= tokenPrice) {
+      _purchase(_tokenId, tokenPrice);
+    }
   }
 
   /// @notice Allow user to leave purchase group; note that their contribution
@@ -323,6 +326,7 @@ contract GroupBuyContract {
 
     userAddressToContributor[userAdd].withdrawableBalance += refundBalance;
     FundsDeposited(userAdd, refundBalance);
+
     _withdrawUserFunds(userAdd);
 
     LeaveGroup(
@@ -345,10 +349,75 @@ contract GroupBuyContract {
   /// @notice Fn for adjusting commission rate
   /// @param numerator Numerator for calculating funds distributed
   /// @param denominator Denominator for calculating funds distributed
-  function adjustCommission(uint256 numerator, uint256 denominator) external onlyCFO {
+  function adjustCommission(uint256 numerator, uint256 denominator) external onlyCLevel {
     require(numerator <= denominator);
     distributionNumerator = numerator;
     distributionDenominator = denominator;
+  }
+
+  /// @dev Backup fn to allow distribution of funds after sale,
+  ///  for the special scenario where an alternate sale platform is used;
+  ///  Group is dissolved after fn call
+  /// @param _tokenId The ID of the Token purchase group
+  /// @param _amount Funds to be distributed
+  function distributeCustomSaleProceeds(uint256 _tokenId, uint256 _amount) external onlyCOO {
+    var group = tokenIndexToGroup[_tokenId];
+
+    // Safety check to make sure group exists and had purchased the token
+    require(group.exists);
+    require(group.purchasePrice > 0);
+    require(_amount > 0);
+
+    _distributeProceeds(_tokenId, _amount);
+  }
+
+  /// @dev Allow distribution of interest payment,
+  ///  Group is intact after fn call
+  /// @param _tokenId The ID of the Token purchase group
+  function distributeInterest(uint256 _tokenId) external onlyCOO payable {
+    var group = tokenIndexToGroup[_tokenId];
+    var amount = msg.value;
+    var excess = amount;
+
+    // Safety check to make sure group exists and had purchased the token
+    require(group.exists);
+    require(group.purchasePrice > 0);
+    require(amount > 0);
+
+    for (uint i = 0; i < tokenIndexToGroup[_tokenId].contributorArr.length; i++) {
+      address userAdd = tokenIndexToGroup[_tokenId].contributorArr[i];
+
+      // calculate contributor's interest proceeds and add to their withdrawable balance
+      uint256 userProceeds = uint256(SafeMath.div(SafeMath.mul(amount,
+        tokenIndexToGroup[_tokenId].addressToContribution[userAdd]),
+        tokenIndexToGroup[_tokenId].contributedBalance));
+      userAddressToContributor[userAdd].withdrawableBalance += userProceeds;
+
+      excess -= userProceeds;
+
+      InterestDeposited(_tokenId, userAdd, userProceeds);
+    }
+    commissionBalance += excess;
+    Commission(_tokenId, excess);
+  }
+
+  /// @dev Allow distribution of funds after a sale
+  ///  Group is dissolved after fn call
+  /// @param _tokenId The ID of the Token purchase group
+  function distributeSaleProceeds(uint256 _tokenId) external onlyCOO {
+    var group = tokenIndexToGroup[_tokenId];
+
+    // Safety check to make sure group exists and had purchased the token
+    require(group.exists);
+    require(group.purchasePrice > 0);
+
+    // Safety check to make sure token had been sold
+    uint256 currPrice = linkedContract.priceOf(_tokenId);
+    uint256 soldPrice = _newPrice(group.purchasePrice);
+    require(currPrice > soldPrice);
+
+    uint256 paymentIntoContract = uint256(SafeMath.div(SafeMath.mul(soldPrice, 94), 100));
+    _distributeProceeds(_tokenId, paymentIntoContract);
   }
 
   /// @dev Called by any "C-level" role to pause the contract. Used only when
@@ -363,38 +432,6 @@ contract GroupBuyContract {
   function unpause() external onlyCEO whenPaused {
     // can't unpause if contract was upgraded
     paused = false;
-  }
-
-  /// @dev Backup fn to allow redistribution of funds after sale,
-  ///  for the special scenario where an alternate sale platform is used
-  /// @param _tokenId The ID of the Token purchase group
-  /// @param _amount Funds to be redistributed
-  function redistributeCustomSaleProceeds(uint256 _tokenId, uint256 _amount) external onlyCOO {
-    var group = tokenIndexToGroup[_tokenId];
-
-    // Safety check to make sure group exists and had purchased the token
-    require(group.exists);
-    require(group.purchasePrice > 0);
-
-    _redistributeProceeds(_tokenId, _amount);
-  }
-
-  /// @dev Allow redistribution of funds after a sale
-  /// @param _tokenId The ID of the Token purchase group
-  function redistributeSaleProceeds(uint256 _tokenId) external onlyCOO {
-    var group = tokenIndexToGroup[_tokenId];
-
-    // Safety check to make sure group exists and had purchased the token
-    require(group.exists);
-    require(group.purchasePrice > 0);
-
-    // Safety check to make sure token had been sold
-    uint256 currPrice = linkedContract.priceOf(_tokenId);
-    uint256 soldPrice = _newPrice(group.purchasePrice);
-    require(currPrice > soldPrice);
-
-    uint256 paymentIntoContract = uint256(SafeMath.div(SafeMath.mul(soldPrice, 94), 100));
-    _redistributeProceeds(_tokenId, paymentIntoContract);
   }
 
   /// @dev Assigns a new address to act as the CEO. Only available to the current CEO.
@@ -627,7 +664,7 @@ contract GroupBuyContract {
   /// @dev Redistribute proceeds from token purchase
   /// @param _tokenId Token ID of token to be purchased
   /// @param _amount Amount paid into contract for token
-  function _redistributeProceeds(uint256 _tokenId, uint256 _amount) private {
+  function _distributeProceeds(uint256 _tokenId, uint256 _amount) private {
     uint256 fundsForDistribution = uint256(SafeMath.div(SafeMath.mul(_amount,
       distributionNumerator), distributionDenominator));
     uint256 commission = _amount;
@@ -640,7 +677,6 @@ contract GroupBuyContract {
         tokenIndexToGroup[_tokenId].addressToContribution[userAdd]),
         tokenIndexToGroup[_tokenId].contributedBalance));
       userAddressToContributor[userAdd].withdrawableBalance += userProceeds;
-      FundsDeposited(userAdd, userProceeds);
 
       _clearGroupRecordInContributor(_tokenId, userAdd);
 
@@ -650,7 +686,7 @@ contract GroupBuyContract {
       commission -= userProceeds;
       activeGroups -= 1;
       tokenIndexToGroup[_tokenId].exists = false;
-      FundsRedistributed(_tokenId, userAdd, userProceeds);
+      ProceedsDeposited(_tokenId, userAdd, userProceeds);
     }
 
     commissionBalance += commission;
@@ -665,8 +701,8 @@ contract GroupBuyContract {
     userAddressToContributor[userAdd].withdrawableBalance = 0;
 
     if (balance > 0) {
-      userAdd.transfer(balance);
       FundsWithdrawn(userAdd, balance);
+      userAdd.transfer(balance);
     }
   }
 }

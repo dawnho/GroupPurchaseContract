@@ -214,29 +214,29 @@ contract("GroupBuyContract", accounts => {
         });
       });
 
-      // it("should block departure if token group does not exist", () => {
-      //   let tokenId = 5;
-      //
-      //   return groupBuy.leaveTokenGroup(tokenId, {
-      //     from: account_three
-      //   }).then(tx => {
-      //     expect(tx.receipt.status).to.equal('0x00', 'transaction should fail');
-      //   });
-      // });
+      it("should block departure if token group does not exist", () => {
+        let tokenId = 5;
+
+        return groupBuy.leaveTokenGroup(tokenId, {
+          from: account_three
+        }).then(tx => {
+          expect(tx.receipt.status).to.equal('0x00', 'transaction should fail');
+        });
+      });
     });
 
-    describe("#redistributeSaleProceeds", () => {
+    describe("#distributeSaleProceeds", () => {
       describe("Safety checks", () => {
-        it("should block redistribution if group had not purchased yet", () => {
-          return groupBuy.redistributeSaleProceeds(0, {
+        it("should block distribution if group had not purchased yet", () => {
+          return groupBuy.distributeSaleProceeds(0, {
             from: account_one
           }).then(tx => {
             expect(tx.receipt.status).to.equal('0x00', 'transaction should fail');
           });
         });
 
-        it("should block redistribution if token had not sold yet", () => {
-          return groupBuy.redistributeSaleProceeds(1, {
+        it("should block distribution if token had not sold yet", () => {
+          return groupBuy.distributeSaleProceeds(1, {
             from: account_one
           }).then(tx => {
             expect(tx.receipt.status).to.equal('0x00', 'transaction should fail');
@@ -245,7 +245,7 @@ contract("GroupBuyContract", accounts => {
       });
 
       describe("After Sale", () => {
-        it("should redistribute all received funds correctly", () => {
+        it("should distribute all received funds correctly", () => {
           let fundsReceived;
           let sumFunds = 0;
           let tokenId = 1;
@@ -257,14 +257,14 @@ contract("GroupBuyContract", accounts => {
             return utils.collectEvents(groupBuy, "FundsReceived");
           }).then(events => {
             fundsReceived = events[0].amount.toNumber();
-            return groupBuy.redistributeSaleProceeds(tokenId, {from: account_two});
+            return groupBuy.distributeSaleProceeds(tokenId, {from: account_two});
           }).then(tx => {
-              expect(tx.receipt.status).to.equal('0x00', 'should throw if anyone other than coo initiates redistribution');
+              expect(tx.receipt.status).to.equal('0x00', 'should throw if anyone other than coo initiates distribution');
           }).then(() => {
-            return groupBuy.redistributeSaleProceeds(tokenId, {from: account_one});
+            return groupBuy.distributeSaleProceeds(tokenId, {from: account_one});
           }).then(tx => {
             expect(tx.receipt.status).to.equal('0x01', 'transaction should succeed');
-            return utils.collectEvents(groupBuy, "FundsRedistributed");
+            return utils.collectEvents(groupBuy, "ProceedsDeposited");
           }).then(events => {
             _.each(events, e => {
               sumFunds += e.amount.toNumber();
@@ -319,7 +319,7 @@ contract("GroupBuyContract", accounts => {
           });
         });
 
-        it("should redistribute all received funds correctly", () => {
+        it("should distribute all received funds correctly", () => {
           var fundsReceived;
           var sumFunds = 0;
 
@@ -331,10 +331,10 @@ contract("GroupBuyContract", accounts => {
           }).then(events => {
             fundsReceived = events[0].amount.toNumber();
           }).then(() => {
-            return groupBuy.redistributeSaleProceeds(2, {from: account_one});
+            return groupBuy.distributeSaleProceeds(2, {from: account_one});
           }).then(tx => {
             expect(tx.receipt.status).to.equal('0x01', 'transaction should succeed');
-            return utils.collectEvents(groupBuy, "FundsRedistributed");
+            return utils.collectEvents(groupBuy, "ProceedsDeposited");
           }).then(events => {
             _.each(events, e => {
               sumFunds += e.amount.toNumber();
@@ -370,6 +370,55 @@ contract("GroupBuyContract", accounts => {
           return groupBuy.commissionBalance({from: account_one});
         }).then(balance => {
           assert.equal(0, balance.toNumber());
+        });
+      });
+    });
+
+    describe("#distributeInterest", () => {
+      describe("Safety checks", () => {
+        it("should block distribution if group had not purchased yet", () => {
+          return groupBuy.distributeInterest(0, {
+            from: account_one
+          }).then(tx => {
+            expect(tx.receipt.status).to.equal('0x00', 'transaction should fail');
+          });
+        });
+
+        it("should block distribution if token group does not exist", () => {
+          return groupBuy.distributeInterest(4, {
+            from: account_one
+          }).then(tx => {
+            expect(tx.receipt.status).to.equal('0x00', 'transaction should fail');
+          });
+        });
+      });
+
+      describe("for a purchased token", () => {
+        let tokenId = 0;
+
+        before(() => {
+          return groupBuy.contributeToTokenGroup(tokenId, {from: account_four, value: 100000});
+        });
+
+        it("should distribute received funds correctly", () => {
+          let interest = 1000;
+          let sumFunds = 0;
+
+          return groupBuy.distributeInterest(tokenId, {
+            from: account_one,
+            value: interest
+          }).then(tx => {
+            expect(tx.receipt.status).to.equal('0x01', 'transaction should succeed');
+            return utils.collectEvents(groupBuy, "InterestDeposited");
+          }).then(events => {
+            _.each(events, e => {
+              sumFunds += e.amount.toNumber();
+            });
+            return utils.collectEvents(groupBuy, "Commission");
+          }).then(events => {
+            sumFunds += events[0].amount.toNumber();
+            expect(interest).to.equal(sumFunds);
+          });
         });
       });
     });
