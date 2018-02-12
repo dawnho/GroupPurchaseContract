@@ -41,11 +41,12 @@ contract("GroupBuyContract", accounts => {
     });
 
     describe("#contributeToTokenGroup", () => {
-      it("should save the contribution record", () => {
+      it("should save the contribution record", async () => {
         let tokenId = 1;
         let contribution = 100;
-        let contribGroupArr, groupContribBalance, groupContribCount,
-          groupTotalBalance, contribWithdrawableBalance;
+
+        let activeGroups = await groupBuy.activeGroups.call();
+
         return groupBuy.contributeToTokenGroup(tokenId, {
           from: account_one,
           value: contribution
@@ -53,25 +54,23 @@ contract("GroupBuyContract", accounts => {
           expect(tx.receipt.status).to.equal('0x01', 'transaction should succeed');
           return groupBuy.getSelfContributionBalanceForTokenGroup(tokenId, {from: account_one});
         }).then(balance => {
-          groupContribBalance = balance.toNumber();
+          expect(balance.toNumber()).to.equal(contribution);
+          return groupBuy.activeGroups.call();
+        }).then(count => {
+          expect(count.toNumber()).to.equal(parseInt(activeGroups) + 1);
           return groupBuy.getTokenGroupTotalBalance(tokenId, {from: account_one});
         }).then(balance => {
-          groupTotalBalance = balance.toNumber();
+          expect(balance.toNumber()).to.equal(contribution);
           return groupBuy.getContributorsInTokenGroup(tokenId, {from: account_two});
         }).then(arr => {
-          groupContribCount = arr.length;
+          expect(arr[0]).to.equal(account_one);
+          expect(arr.length).to.equal(1);
           return groupBuy.getGroupsContributedTo(account_one, {from: account_two});
         }).then(arr => {
-          contribGroupArr = arr;
+          expect(arr[0].toNumber()).to.equal(tokenId);
           return groupBuy.getWithdrawableBalance({from: account_one});
         }).then(balance => {
-          contribWithdrawableBalance = balance.toNumber();
-        }).then(() => {
-          expect(groupContribBalance).to.equal(contribution);
-          expect(groupTotalBalance).to.equal(contribution);
-          expect(groupContribCount).to.equal(1);
-          expect(contribWithdrawableBalance).to.equal(0);
-          expect(contribGroupArr[0].toNumber()).to.equal(tokenId);
+          expect(balance.toNumber()).to.equal(0);
         });
       });
 
@@ -245,10 +244,11 @@ contract("GroupBuyContract", accounts => {
       });
 
       describe("After Sale", () => {
-        it("should distribute all received funds correctly", () => {
+        it("should distribute all received funds correctly", async () => {
           let fundsReceived;
           let sumFunds = 0;
           let tokenId = 1;
+          let activeGroups = await groupBuy.activeGroups.call();
 
           return celeb.purchase(tokenId, {
             from: account_four,
@@ -273,6 +273,9 @@ contract("GroupBuyContract", accounts => {
           }).then(events => {
             sumFunds += events[0].amount.toNumber();
             expect(fundsReceived).to.equal(sumFunds);
+            return groupBuy.activeGroups.call();
+          }).then(count => {
+            expect(count.toNumber()).to.equal(activeGroups - 1);
           });
         });
 
@@ -374,18 +377,32 @@ contract("GroupBuyContract", accounts => {
       });
     });
 
-    describe("#distributeInterest", () => {
+    describe("#dissolveTokenGroup", () => {
+      let tokenId = 2;
+
+      before(() => {
+        return groupBuy.contributeToTokenGroup(0, {
+          from: account_one,
+          value: 100000
+        }).then(() => {
+          return groupBuy.contributeToTokenGroup(1, {
+            from: account_two,
+            value: 100
+          })
+        })
+      });
+
       describe("Safety checks", () => {
-        it("should block distribution if group had not purchased yet", () => {
-          return groupBuy.distributeInterest(0, {
+        it("should block the dissolve if group does not exist", () => {
+          return groupBuy.dissolveTokenGroup(5, {
             from: account_one
           }).then(tx => {
             expect(tx.receipt.status).to.equal('0x00', 'transaction should fail');
           });
         });
 
-        it("should block distribution if token group does not exist", () => {
-          return groupBuy.distributeInterest(4, {
+        it("should block dissolve if token had been purchased", () => {
+          return groupBuy.dissolveTokenGroup(0, {
             from: account_one
           }).then(tx => {
             expect(tx.receipt.status).to.equal('0x00', 'transaction should fail');
@@ -393,34 +410,118 @@ contract("GroupBuyContract", accounts => {
         });
       });
 
-      describe("for a purchased token", () => {
-        let tokenId = 0;
-
-        before(() => {
-          return groupBuy.contributeToTokenGroup(tokenId, {from: account_four, value: 100000});
-        });
-
-        it("should distribute received funds correctly", () => {
-          let interest = 1000;
-          let sumFunds = 0;
-
-          return groupBuy.distributeInterest(tokenId, {
-            from: account_one,
-            value: interest
-          }).then(tx => {
-            expect(tx.receipt.status).to.equal('0x01', 'transaction should succeed');
-            return utils.collectEvents(groupBuy, "InterestDeposited");
-          }).then(events => {
-            _.each(events, e => {
-              sumFunds += e.amount.toNumber();
-            });
-            return utils.collectEvents(groupBuy, "Commission");
-          }).then(events => {
-            sumFunds += events[0].amount.toNumber();
-            expect(interest).to.equal(sumFunds);
-          });
-        });
-      });
+      // describe("After Sale", () => {
+      //   it("should distribute all received funds correctly", async () => {
+      //     let fundsReceived;
+      //     let sumFunds = 0;
+      //     let tokenId = 1;
+      //     let activeGroups = await groupBuy.activeGroups.call();
+      //
+      //     return celeb.purchase(tokenId, {
+      //       from: account_four,
+      //       value: 1000000
+      //     }).then(() => {
+      //       return utils.collectEvents(groupBuy, "FundsReceived");
+      //     }).then(events => {
+      //       fundsReceived = events[0].amount.toNumber();
+      //       return groupBuy.dissolveTokenGroup(tokenId, {from: account_two});
+      //     }).then(tx => {
+      //         expect(tx.receipt.status).to.equal('0x00', 'should throw if anyone other than coo initiates distribution');
+      //     }).then(() => {
+      //       return groupBuy.dissolveTokenGroup(tokenId, {from: account_one});
+      //     }).then(tx => {
+      //       expect(tx.receipt.status).to.equal('0x01', 'transaction should succeed');
+      //       return utils.collectEvents(groupBuy, "ProceedsDeposited");
+      //     }).then(events => {
+      //       _.each(events, e => {
+      //         sumFunds += e.amount.toNumber();
+      //       });
+      //       return utils.collectEvents(groupBuy, "Commission");
+      //     }).then(events => {
+      //       sumFunds += events[0].amount.toNumber();
+      //       expect(fundsReceived).to.equal(sumFunds);
+      //       return groupBuy.activeGroups.call();
+      //     }).then(count => {
+      //       expect(count.toNumber()).to.equal(activeGroups - 1);
+      //     });
+      //   });
+      //
+      //   // Skipped b/c group.exists needs to be true for these fns to work
+      //   it.skip("should empty out group and contributor values", async () => {
+      //     let tokenId = 1;
+      //
+      //     let groups_one = await groupBuy.getGroupsContributedTo({from: account_one});
+      //     let groups_two = await groupBuy.getGroupsContributedTo({from: account_two});
+      //     let groups_three = await groupBuy.getGroupsContributedTo({from: account_three});
+      //
+      //     let contrib_one = await groupBuy.getSelfContributionBalanceForTokenGroup(tokenId, {from: account_one});
+      //     let contrib_two = await groupBuy.getSelfContributionBalanceForTokenGroup(tokenId, {from: account_two});
+      //     let contrib_three = await groupBuy.getSelfContributionBalanceForTokenGroup(tokenId, {from: account_three});
+      //
+      //     let contrib_arr = await groupBuy.getSelfContributorsInTokenGroup(tokenId, {from: account_three});
+      //     let contrib_balance = await groupBuy.getTokenGroupTotalBalance(tokenId, {from: account_three});
+      //
+      //     expect(_.some(groups_one, findToken)).to.be.false;
+      //     expect(_.some(groups_two, findToken)).to.be.false;
+      //     expect(_.some(groups_three, findToken)).to.be.false;
+      //
+      //     expect(contrib_one.toNumber()).to.equal(0);
+      //     expect(contrib_two.toNumber()).to.equal(0);
+      //     expect(contrib_three.toNumber()).to.equal(0);
+      //
+      //     expect(contrib_arr.length).to.equal(0);
+      //     expect(contrib_balance.toNumber()).to.equal(0);
+      //   });
+      // });
     });
+
+    // describe("#distributeInterest", () => {
+    //   describe("Safety checks", () => {
+    //     it("should block distribution if group had not purchased yet", () => {
+    //       return groupBuy.distributeInterest(0, {
+    //         from: account_one
+    //       }).then(tx => {
+    //         expect(tx.receipt.status).to.equal('0x00', 'transaction should fail');
+    //       });
+    //     });
+    //
+    //     it("should block distribution if token group does not exist", () => {
+    //       return groupBuy.distributeInterest(4, {
+    //         from: account_one
+    //       }).then(tx => {
+    //         expect(tx.receipt.status).to.equal('0x00', 'transaction should fail');
+    //       });
+    //     });
+    //   });
+    //
+    //   describe("for a purchased token", () => {
+    //     let tokenId = 0;
+    //
+    //     before(() => {
+    //       return groupBuy.contributeToTokenGroup(tokenId, {from: account_four, value: 100000});
+    //     });
+    //
+    //     it("should distribute received funds correctly", () => {
+    //       let interest = 1000;
+    //       let sumFunds = 0;
+    //
+    //       return groupBuy.distributeInterest(tokenId, {
+    //         from: account_one,
+    //         value: interest
+    //       }).then(tx => {
+    //         expect(tx.receipt.status).to.equal('0x01', 'transaction should succeed');
+    //         return utils.collectEvents(groupBuy, "InterestDeposited");
+    //       }).then(events => {
+    //         _.each(events, e => {
+    //           sumFunds += e.amount.toNumber();
+    //         });
+    //         return utils.collectEvents(groupBuy, "Commission");
+    //       }).then(events => {
+    //         sumFunds += events[0].amount.toNumber();
+    //         expect(interest).to.equal(sumFunds);
+    //       });
+    //     });
+    //   });
+    // });
   });
 });

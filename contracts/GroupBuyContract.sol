@@ -93,6 +93,7 @@ contract GroupBuyContract {
 
   // @dev Keeps track whether the contract is paused. When that is true, most actions are blocked
   bool public paused = false;
+  bool public forking = false;
 
   uint256 public activeGroups;
   uint256 public commissionBalance;
@@ -154,6 +155,18 @@ contract GroupBuyContract {
     _;
   }
 
+  /// @dev Modifier to allow actions only when the contract IS NOT in forking mode
+  modifier whenNotForking() {
+    require(!forking);
+    _;
+  }
+
+  /// @dev Modifier to allow actions only when the contract IS in forking mode
+  modifier whenForking {
+    require(forking);
+    _;
+  }
+
   /*** CONSTRUCTOR ***/
   function GroupBuyContract(address contractAddress, uint256 numerator, uint256 denominator) public {
     ceoAddress = msg.sender;
@@ -197,9 +210,10 @@ contract GroupBuyContract {
 
   /// @notice Allow user to contribute to _tokenId token group
   /// @param _tokenId The ID of the token group to be joined
-  function contributeToTokenGroup(uint256 _tokenId) external payable whenNotPaused {
+  function contributeToTokenGroup(uint256 _tokenId)
+  external payable whenNotForking whenNotPaused {
     address userAdd = msg.sender;
-    // Safety check to prevent against an unexpected 0x0 default.
+    // Safety check to prevent against an un  expected 0x0 default.
     require(_addressNotNull(userAdd));
 
     /// Safety check to make sure contributor has not already joined this group
@@ -355,9 +369,39 @@ contract GroupBuyContract {
     distributionDenominator = denominator;
   }
 
+  /// @dev In the event of needing a fork, this function moves all
+  ///  of a group's contributors' contributions into their withdrawable balance.
+  /// @notice Group is dissolved after fn call
+  /// @param _tokenId The ID of the Token purchase group
+  function dissolveTokenGroup(uint256 _tokenId) external onlyCOO whenForking {
+    var group = tokenIndexToGroup[_tokenId];
+
+    // Safety check to make sure group exists and had not purchased a token
+    require(group.exists);
+    require(group.purchasePrice == 0);
+
+    for (uint i = 0; i < tokenIndexToGroup[_tokenId].contributorArr.length; i++) {
+      address userAdd = tokenIndexToGroup[_tokenId].contributorArr[i];
+
+      var userContribution = group.addressToContribution[userAdd];
+
+      _clearGroupRecordInContributor(_tokenId, userAdd);
+
+      // clear contributor record on group
+      tokenIndexToGroup[_tokenId].addressToContribution[userAdd] = 0;
+      tokenIndexToGroup[_tokenId].addressToContributorArrIndex[userAdd] = 0;
+
+      // move contributor's contribution to their withdrawable balance
+      userAddressToContributor[userAdd].withdrawableBalance += userContribution;
+      ProceedsDeposited(_tokenId, userAdd, userContribution);
+    }
+    activeGroups -= 1;
+    tokenIndexToGroup[_tokenId].exists = false;
+  }
+
   /// @dev Backup fn to allow distribution of funds after sale,
   ///  for the special scenario where an alternate sale platform is used;
-  ///  Group is dissolved after fn call
+  /// @notice Group is dissolved after fn call
   /// @param _tokenId The ID of the Token purchase group
   /// @param _amount Funds to be distributed
   function distributeCustomSaleProceeds(uint256 _tokenId, uint256 _amount) external onlyCOO {
@@ -371,7 +415,7 @@ contract GroupBuyContract {
     _distributeProceeds(_tokenId, _amount);
   }
 
-  /// @dev Allow distribution of interest payment,
+  /* /// @dev Allow distribution of interest payment,
   ///  Group is intact after fn call
   /// @param _tokenId The ID of the Token purchase group
   function distributeInterest(uint256 _tokenId) external onlyCOO payable {
@@ -399,9 +443,9 @@ contract GroupBuyContract {
     }
     commissionBalance += excess;
     Commission(_tokenId, excess);
-  }
+  } */
 
-  /// @dev Allow distribution of funds after a sale
+  /// @dev Distribute funds after a token is sold.
   ///  Group is dissolved after fn call
   /// @param _tokenId The ID of the Token purchase group
   function distributeSaleProceeds(uint256 _tokenId) external onlyCOO {
@@ -432,6 +476,20 @@ contract GroupBuyContract {
   function unpause() external onlyCEO whenPaused {
     // can't unpause if contract was upgraded
     paused = false;
+  }
+
+  /// @dev Called by any "C-level" role to set the contract to . Used only when
+  ///  a bug or exploit is detected and we need to limit damage.
+  function setToForking() external onlyCLevel whenNotForking {
+    forking = true;
+  }
+
+  /// @dev Unpauses the smart contract. Can only be called by the CEO, since
+  ///  one reason we may pause the contract is when CFO or COO accounts are
+  ///  compromised.
+  function setToNotForking() external onlyCEO whenForking {
+    // can't unpause if contract was upgraded
+    forking = false;
   }
 
   /// @dev Assigns a new address to act as the CEO. Only available to the current CEO.
@@ -637,6 +695,43 @@ contract GroupBuyContract {
     userAddressToContributor[_userAdd].groupArr.length -= 1;
   }
 
+  /// @dev Redistribute proceeds from token purchase
+  /// @param _tokenId Token ID of token to be purchased
+  /// @param _amount Amount paid into contract for token
+  function _distributeProceeds(uint256 _tokenId, uint256 _amount) private {
+    uint256 fundsForDistribution = uint256(SafeMath.div(SafeMath.mul(_amount,
+      distributionNumerator), distributionDenominator));
+    uint256 commission = _amount;
+
+    for (uint i = 0; i < tokenIndexToGroup[_tokenId].contributorArr.length; i++) {
+      address userAdd = tokenIndexToGroup[_tokenId].contributorArr[i];
+
+      // calculate contributor's sale proceeds and add to their withdrawable balance
+      uint256 userProceeds = uint256(SafeMath.div(SafeMath.mul(fundsForDistribution,
+        tokenIndexToGroup[_tokenId].addressToContribution[userAdd]),
+        tokenIndexToGroup[_tokenId].contributedBalance));
+
+      _clearGroupRecordInContributor(_tokenId, userAdd);
+
+      // clear contributor record on group
+      tokenIndexToGroup[_tokenId].addressToContribution[userAdd] = 0;
+      tokenIndexToGroup[_tokenId].addressToContributorArrIndex[userAdd] = 0;
+
+      commission -= userProceeds;
+      userAddressToContributor[userAdd].withdrawableBalance += userProceeds;
+      ProceedsDeposited(_tokenId, userAdd, userProceeds);
+    }
+
+    commissionBalance += commission;
+    Commission(_tokenId, commission);
+
+    activeGroups -= 1;
+    tokenIndexToGroup[_tokenId].exists = false;
+    tokenIndexToGroup[_tokenId].contributorArr.length = 0;
+    tokenIndexToGroup[_tokenId].contributedBalance = 0;
+    tokenIndexToGroup[_tokenId].purchasePrice = 0;
+  }
+
   /// @dev Calculates next price of celebrity token
   /// @param _oldPrice Previous price
   function _newPrice(uint256 _oldPrice) private view returns (uint256 newPrice) {
@@ -659,41 +754,6 @@ contract GroupBuyContract {
     tokenIndexToGroup[_tokenId].purchasePrice = _amount;
     linkedContract.purchase.value(_amount)(_tokenId);
     TokenPurchased(_tokenId, _amount);
-  }
-
-  /// @dev Redistribute proceeds from token purchase
-  /// @param _tokenId Token ID of token to be purchased
-  /// @param _amount Amount paid into contract for token
-  function _distributeProceeds(uint256 _tokenId, uint256 _amount) private {
-    uint256 fundsForDistribution = uint256(SafeMath.div(SafeMath.mul(_amount,
-      distributionNumerator), distributionDenominator));
-    uint256 commission = _amount;
-
-    for (uint i = 0; i < tokenIndexToGroup[_tokenId].contributorArr.length; i++) {
-      address userAdd = tokenIndexToGroup[_tokenId].contributorArr[i];
-
-      // calculate contributor's sale proceeds and add to their withdrawable balance
-      uint256 userProceeds = uint256(SafeMath.div(SafeMath.mul(fundsForDistribution,
-        tokenIndexToGroup[_tokenId].addressToContribution[userAdd]),
-        tokenIndexToGroup[_tokenId].contributedBalance));
-      userAddressToContributor[userAdd].withdrawableBalance += userProceeds;
-
-      _clearGroupRecordInContributor(_tokenId, userAdd);
-
-      // clear contributor record on group
-      tokenIndexToGroup[_tokenId].addressToContribution[userAdd] = 0;
-      tokenIndexToGroup[_tokenId].addressToContributorArrIndex[userAdd] = 0;
-      commission -= userProceeds;
-      activeGroups -= 1;
-      tokenIndexToGroup[_tokenId].exists = false;
-      ProceedsDeposited(_tokenId, userAdd, userProceeds);
-    }
-
-    commissionBalance += commission;
-    Commission(_tokenId, commission);
-    tokenIndexToGroup[_tokenId].contributorArr.length = 0;
-    tokenIndexToGroup[_tokenId].contributedBalance = 0;
-    tokenIndexToGroup[_tokenId].purchasePrice = 0;
   }
 
   function _withdrawUserFunds(address userAdd) private {
